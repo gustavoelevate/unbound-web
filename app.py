@@ -161,8 +161,20 @@ def stats():
         except:
             status = "inactive"
 
+        uptime_s = float(d.get("time.up", 0))
+        days, rem = divmod(uptime_s, 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes, _ = divmod(rem, 60)
+        if days > 0:
+            uptime = f"{int(days)}d {int(hours)}h {int(minutes)}m"
+        elif hours > 0:
+            uptime = f"{int(hours)}h {int(minutes)}m"
+        else:
+            uptime = f"{int(minutes)}m"
+
         return jsonify({
             "status": status,
+            "uptime": uptime,
             "queries": queries,
             "cachehits": cachehits,
             "cachemiss": cachemiss,
@@ -202,6 +214,10 @@ def api_history():
     dbad = list(history["dnssec_bad"])
     ravg = list(history["resp_avg"])
     rmed = list(history["resp_med"])
+    qa = list(history["qps_a"])
+    qaaaa = list(history["qps_aaaa"])
+    qcname = list(history["qps_cname"])
+    qsf = list(history["qps_servfail"])
     # Pegar os ultimos N pontos
     return jsonify({
         "timestamps": ts[-points:],
@@ -212,6 +228,10 @@ def api_history():
         "dnssec_bad": dbad[-points:],
         "resp_avg":   ravg[-points:],
         "resp_med":   rmed[-points:],
+        "qps_a": qa[-points:],
+        "qps_aaaa": qaaaa[-points:],
+        "qps_cname": qcname[-points:],
+        "qps_servfail": qsf[-points:],
     })
 
 # API debug - mostrar todas as chaves do unbound-control stats
@@ -392,7 +412,15 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
       <div class="col-12">
         <div class="chart-card">
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <div class="chart-title mb-0"><i class="bi bi-activity text-danger"></i> Consultas em Tempo Real (últimos 5 min)</div>
+            <div class="chart-title mb-0"><i class="bi bi-activity text-danger"></i> Consultas DNS</div>
+            <div class="period-group">
+              <button class="period-btn active" onclick="setRtPeriod(0,this)">5 Min</button>
+              <button class="period-btn" onclick="setRtPeriod(1,this)">1h</button>
+              <button class="period-btn" onclick="setRtPeriod(3,this)">3h</button>
+              <button class="period-btn" onclick="setRtPeriod(6,this)">6h</button>
+              <button class="period-btn" onclick="setRtPeriod(12,this)">12h</button>
+              <button class="period-btn" onclick="setRtPeriod(24,this)">24h</button>
+            </div>
           </div>
           <div class="chart-wrap"><canvas id="chart-realtime"></canvas></div>
         </div>
@@ -535,18 +563,47 @@ function makeChart(id,type,data,opts={}){
 }
 
 // Periodos
-let cachePeriod=1, respPeriod=1;
+let cachePeriod=1, respPeriod=1, rtPeriod=0;
 function setPeriod(h,el){
   cachePeriod=h;
-  document.querySelectorAll('.period-group')[0].querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  el.parentNode.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   loadHistory();
 }
 function setRespPeriod(h,el){
   respPeriod=h;
-  document.querySelectorAll('.period-group')[1].querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  el.parentNode.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   loadHistory();
+}
+function setRtPeriod(h,el){
+  rtPeriod=h;
+  el.parentNode.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  if(h>0) loadHistory();
+  else renderRtChart(rtLabels, rtDataTotal, rtDataA, rtDataAAAA, rtDataCNAME, rtDataServfail);
+}
+function renderRtChart(labels, total, a, aaaa, cname, sf) {
+  if(charts['chart-realtime']){
+    charts['chart-realtime'].data.labels=labels;
+    charts['chart-realtime'].data.datasets[0].data=total;
+    charts['chart-realtime'].data.datasets[1].data=a;
+    charts['chart-realtime'].data.datasets[2].data=aaaa;
+    charts['chart-realtime'].data.datasets[3].data=cname;
+    charts['chart-realtime'].data.datasets[4].data=sf;
+    charts['chart-realtime'].update(rtPeriod===0?{duration:0}:undefined);
+  } else {
+    makeChart('chart-realtime','line',{
+      labels:labels,
+      datasets:[
+        {label:'Total QPS',data:total,borderColor:'#3b82f6',tension:.4,pointRadius:0,borderWidth:2},
+        {label:'A QPS',data:a,borderColor:'#10b981',tension:.4,pointRadius:0,borderWidth:1.5},
+        {label:'AAAA QPS',data:aaaa,borderColor:'#f59e0b',tension:.4,pointRadius:0,borderWidth:1.5},
+        {label:'CNAME QPS',data:cname,borderColor:'#8b5cf6',tension:.4,pointRadius:0,borderWidth:1.5},
+        {label:'SERVFAIL',data:sf,borderColor:'#ef4444',tension:.4,pointRadius:0,borderWidth:1.5}
+      ]
+    },{animation:{duration:0}});
+  }
 }
 
 // Realtime globals
@@ -560,7 +617,7 @@ async function loadStats(){
     const r=await fetch('/api/stats');
     const d=await r.json();
     const badge=document.getElementById('status-badge');
-    if(d.status==='active'){badge.className='badge-status badge-active';badge.innerHTML='<span class="dot dot-green"></span> Unbound Ativo';}
+    if(d.status==='active'){badge.className='badge-status badge-active';badge.innerHTML='<span class="dot dot-green"></span> Unbound Ativo (Uptime: '+d.uptime+')';}
     else{badge.className='badge-status badge-inactive';badge.innerHTML='<span class="dot dot-red"></span> Unbound Inativo';}
 
     // System Metrics
@@ -603,20 +660,7 @@ async function loadStats(){
            rtDataCNAME.push(dcname.toFixed(1)); rtDataCNAME.shift();
            rtDataServfail.push(dsf.toFixed(1)); rtDataServfail.shift();
 
-           if(charts['chart-realtime']){
-               charts['chart-realtime'].update();
-           } else {
-               makeChart('chart-realtime', 'line', {
-                   labels: rtLabels,
-                   datasets: [
-                       {label: 'Total QPS', data: rtDataTotal, borderColor: '#3b82f6', tension: 0.4, pointRadius: 0, borderWidth: 2},
-                       {label: 'A QPS', data: rtDataA, borderColor: '#10b981', tension: 0.4, pointRadius: 0, borderWidth: 1.5},
-                       {label: 'AAAA QPS', data: rtDataAAAA, borderColor: '#f59e0b', tension: 0.4, pointRadius: 0, borderWidth: 1.5},
-                       {label: 'CNAME QPS', data: rtDataCNAME, borderColor: '#8b5cf6', tension: 0.4, pointRadius: 0, borderWidth: 1.5},
-                       {label: 'SERVFAIL QPS', data: rtDataServfail, borderColor: '#ef4444', tension: 0.4, pointRadius: 0, borderWidth: 1.5}
-                   ]
-               }, { animation: {duration: 0} });
-           }
+           if(rtPeriod===0) renderRtChart(rtLabels, rtDataTotal, rtDataA, rtDataAAAA, rtDataCNAME, rtDataServfail);
        }
     }
     lastStats = d;
@@ -653,8 +697,8 @@ async function loadStats(){
 // History
 async function loadHistory(){
   try{
-    // Carregar periodo maior entre os dois graficos
-    const maxH=Math.max(cachePeriod,respPeriod);
+    // Carregar periodo maior entre os graficos
+    const maxH=Math.max(cachePeriod,respPeriod,rtPeriod);
     const r=await fetch('/api/history?hours='+maxH);
     const h=await r.json();
 
@@ -697,6 +741,17 @@ async function loadHistory(){
         {label:'Inválidos',data:h.dnssec_bad.slice(-60),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
       ]
     });
+
+    if(rtPeriod>0){
+      const rtPoints=rtPeriod*60;
+      const rts=ts.slice(-Math.min(rtPoints,tsLen));
+      const rqps=h.qps.slice(-Math.min(rtPoints,tsLen));
+      const ra=h.qps_a.slice(-Math.min(rtPoints,tsLen));
+      const raaaa=h.qps_aaaa.slice(-Math.min(rtPoints,tsLen));
+      const rcname=h.qps_cname.slice(-Math.min(rtPoints,tsLen));
+      const rsf=h.qps_servfail.slice(-Math.min(rtPoints,tsLen));
+      renderRtChart(rts, rqps, ra, raaaa, rcname, rsf);
+    }
 
   }catch(e){console.error('history error:',e);}
 }
