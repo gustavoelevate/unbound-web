@@ -6,6 +6,7 @@ import time
 import threading
 from collections import deque
 from datetime import datetime
+import psutil
 
 app = Flask(__name__)
 
@@ -145,6 +146,10 @@ def stats():
             "unwanted_replies": int(d.get("unwanted.replies", 0)),
             "unwanted_queries": int(d.get("unwanted.queries", 0)),
             "qtypes": qtypes,
+            "servfail": int(d.get("num.answer.rcode.SERVFAIL", 0)),
+            "sys_cpu": psutil.cpu_percent(interval=None),
+            "sys_mem": psutil.virtual_memory().percent,
+            "sys_disk": psutil.disk_usage('/').percent,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -331,15 +336,41 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
       </div>
     </div>
 
-    <div class="section-title">Métricas Críticas</div>
+    <div class="section-title">System Metrics (Real-time)</div>
+    <div class="row g-3 mb-4">
+      <div class="col-md-4"><div class="metric-card"><div class="label">CPU Utilization</div><div class="value" id="m-sys-cpu">—</div><div class="sub" id="m-sys-cpu-bar" style="height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden;"><div style="width:0%;height:100%;background:var(--success);transition:width 0.5s;"></div></div></div></div>
+      <div class="col-md-4"><div class="metric-card"><div class="label">Memory Utilization</div><div class="value" id="m-sys-mem">—</div><div class="sub" id="m-sys-mem-bar" style="height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden;"><div style="width:0%;height:100%;background:var(--success);transition:width 0.5s;"></div></div></div></div>
+      <div class="col-md-4"><div class="metric-card"><div class="label">Disk Utilization</div><div class="value" id="m-sys-disk">—</div><div class="sub" id="m-sys-disk-bar" style="height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden;"><div style="width:0%;height:100%;background:var(--success);transition:width 0.5s;"></div></div></div></div>
+    </div>
+
+    <div class="section-title">DNS Traffic (Real-time)</div>
+    <div class="row g-3 mb-4">
+      <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">TOTAL Queries</div><div class="value text-primary" id="m-tot-q" style="font-size:1.8rem">—</div></div></div>
+      <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">Type A</div><div class="value text-success" id="m-tot-a" style="font-size:1.8rem">—</div></div></div>
+      <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">Type AAAA</div><div class="value text-warning" id="m-tot-aaaa" style="font-size:1.8rem">—</div></div></div>
+      <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">Type CNAME</div><div class="value" style="color:#8b5cf6;font-size:1.8rem;" id="m-tot-cname">—</div></div></div>
+      <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">SERVFAIL</div><div class="value text-danger" id="m-tot-servfail" style="font-size:1.8rem">—</div></div></div>
+      <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">Cache Hits</div><div class="value text-info" id="m-tot-hits" style="font-size:1.8rem">—</div></div></div>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="chart-card">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="chart-title mb-0"><i class="bi bi-activity text-danger"></i> Consultas em Tempo Real (últimos 5 min)</div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-realtime"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Métricas Críticas & Segurança</div>
     <div class="row g-3 mb-4">
       <div class="col-md-3"><div class="metric-card"><div class="label">Consultas por Segundo <i class="bi bi-question-circle tooltip-icon" title="QPS atual"></i></div><div class="value" id="m-qps">—</div><div class="sub sub-green">QPS atual</div></div></div>
       <div class="col-md-3"><div class="metric-card"><div class="label">Tempo de resposta <i class="bi bi-question-circle tooltip-icon" title="Tempo médio de resolução recursiva em ms"></i></div><div class="value" id="m-resp">—</div><div class="sub sub-yellow" id="m-resp-sub">média | mediana: —</div></div></div>
       <div class="col-md-3"><div class="metric-card"><div class="label">Cache Hit Ratio <i class="bi bi-question-circle tooltip-icon" title="Percentual servido do cache"></i></div><div class="value" id="m-hitrate">—</div><div class="sub sub-green" id="m-hitrate-sub">hits: — | miss: —</div></div></div>
       <div class="col-md-3"><div class="metric-card"><div class="label">Request List <i class="bi bi-question-circle tooltip-icon" title="Tamanho da fila de requisições"></i></div><div class="value" id="m-reqavg">—</div><div class="sub sub-yellow" id="m-reqavg-sub">max: —</div></div></div>
     </div>
-
-    <div class="section-title">Segurança e Performance</div>
     <div class="row g-3 mb-4">
       <div class="col-md-3"><div class="metric-card"><div class="label">DNSSEC Validação <i class="bi bi-question-circle tooltip-icon" title="Respostas DNSSEC validadas"></i></div><div class="value" id="m-dnssec">—</div><div class="sub sub-green" id="m-dnssec-sub">validados: — | inválidos: —</div></div></div>
       <div class="col-md-3"><div class="metric-card"><div class="label">Prefetch e Cache <i class="bi bi-question-circle tooltip-icon" title="Entradas de prefetch e cache"></i></div><div class="value" id="m-prefetch">—</div><div class="sub sub-blue" id="m-prefetch-sub">RRsets: — | Mensagens: —</div></div></div>
@@ -483,6 +514,11 @@ function setRespPeriod(h,el){
   loadHistory();
 }
 
+// Realtime globals
+let rtLabels=Array(60).fill('');let rtDataTotal=Array(60).fill(0);let rtDataA=Array(60).fill(0);
+let rtDataAAAA=Array(60).fill(0);let rtDataCNAME=Array(60).fill(0);let rtDataServfail=Array(60).fill(0);
+let lastStats=null;let lastStatsTs=0;
+
 // Stats
 async function loadStats(){
   try{
@@ -492,6 +528,66 @@ async function loadStats(){
     if(d.status==='active'){badge.className='badge-status badge-active';badge.innerHTML='<span class="dot dot-green"></span> Unbound Ativo';}
     else{badge.className='badge-status badge-inactive';badge.innerHTML='<span class="dot dot-red"></span> Unbound Inativo';}
 
+    // System Metrics
+    document.getElementById('m-sys-cpu').textContent=d.sys_cpu+'%';
+    document.getElementById('m-sys-cpu-bar').firstChild.style.width=d.sys_cpu+'%';
+    document.getElementById('m-sys-cpu-bar').firstChild.style.background=d.sys_cpu>85?'var(--danger)':(d.sys_cpu>60?'var(--warning)':'var(--success)');
+    document.getElementById('m-sys-mem').textContent=d.sys_mem+'%';
+    document.getElementById('m-sys-mem-bar').firstChild.style.width=d.sys_mem+'%';
+    document.getElementById('m-sys-mem-bar').firstChild.style.background=d.sys_mem>85?'var(--danger)':(d.sys_mem>60?'var(--warning)':'var(--success)');
+    document.getElementById('m-sys-disk').textContent=d.sys_disk+'%';
+    document.getElementById('m-sys-disk-bar').firstChild.style.width=d.sys_disk+'%';
+    document.getElementById('m-sys-disk-bar').firstChild.style.background=d.sys_disk>85?'var(--danger)':(d.sys_disk>60?'var(--warning)':'var(--success)');
+
+    const qt=d.qtypes||{};
+    // DNS Totals
+    document.getElementById('m-tot-q').textContent=fmt(d.queries);
+    document.getElementById('m-tot-a').textContent=fmt(qt['A']||0);
+    document.getElementById('m-tot-aaaa').textContent=fmt(qt['AAAA']||0);
+    document.getElementById('m-tot-cname').textContent=fmt(qt['CNAME']||0);
+    document.getElementById('m-tot-servfail').textContent=fmt(d.servfail||0);
+    document.getElementById('m-tot-hits').textContent=fmt(d.cachehits||0);
+
+    // Realtime chart
+    const now = performance.now();
+    if(lastStats){
+       const elapsed = (now - lastStatsTs) / 1000;
+       if(elapsed > 0){
+           const dq = Math.max(0, d.queries - lastStats.queries) / elapsed;
+           const da = Math.max(0, (qt['A']||0) - ((lastStats.qtypes||{})['A']||0)) / elapsed;
+           const daaaa = Math.max(0, (qt['AAAA']||0) - ((lastStats.qtypes||{})['AAAA']||0)) / elapsed;
+           const dcname = Math.max(0, (qt['CNAME']||0) - ((lastStats.qtypes||{})['CNAME']||0)) / elapsed;
+           const dsf = Math.max(0, (d.servfail||0) - (lastStats.servfail||0)) / elapsed;
+
+           const dt = new Date();
+           rtLabels.push(dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0')+':'+dt.getSeconds().toString().padStart(2,'0'));
+           rtLabels.shift();
+           rtDataTotal.push(dq.toFixed(1)); rtDataTotal.shift();
+           rtDataA.push(da.toFixed(1)); rtDataA.shift();
+           rtDataAAAA.push(daaaa.toFixed(1)); rtDataAAAA.shift();
+           rtDataCNAME.push(dcname.toFixed(1)); rtDataCNAME.shift();
+           rtDataServfail.push(dsf.toFixed(1)); rtDataServfail.shift();
+
+           if(charts['chart-realtime']){
+               charts['chart-realtime'].update();
+           } else {
+               makeChart('chart-realtime', 'line', {
+                   labels: rtLabels,
+                   datasets: [
+                       {label: 'Total QPS', data: rtDataTotal, borderColor: '#3b82f6', tension: 0.4, pointRadius: 0, borderWidth: 2},
+                       {label: 'A QPS', data: rtDataA, borderColor: '#10b981', tension: 0.4, pointRadius: 0, borderWidth: 1.5},
+                       {label: 'AAAA QPS', data: rtDataAAAA, borderColor: '#f59e0b', tension: 0.4, pointRadius: 0, borderWidth: 1.5},
+                       {label: 'CNAME QPS', data: rtDataCNAME, borderColor: '#8b5cf6', tension: 0.4, pointRadius: 0, borderWidth: 1.5},
+                       {label: 'SERVFAIL QPS', data: rtDataServfail, borderColor: '#ef4444', tension: 0.4, pointRadius: 0, borderWidth: 1.5}
+                   ]
+               }, { animation: {duration: 0} });
+           }
+       }
+    }
+    lastStats = d;
+    lastStatsTs = now;
+
+    // Critical Metrics Update
     document.getElementById('m-qps').textContent=d.qps;
     document.getElementById('m-resp').textContent=d.resp_avg+' ms';
     document.getElementById('m-resp-sub').textContent='média | mediana: '+d.resp_med+' ms';
@@ -499,8 +595,8 @@ async function loadStats(){
     document.getElementById('m-hitrate-sub').textContent='hits: '+fmt(d.cachehits)+' | miss: '+fmt(d.cachemiss);
     document.getElementById('m-reqavg').textContent=d.requestlist_avg;
     document.getElementById('m-reqavg-sub').textContent='max: '+fmt(d.requestlist_max);
-    const dt=d.dnssec_ok+d.dnssec_bad;
-    const dp=dt>0?((d.dnssec_ok/dt)*100).toFixed(1):'0.0';
+    const dt2=d.dnssec_ok+d.dnssec_bad;
+    const dp=dt2>0?((d.dnssec_ok/dt2)*100).toFixed(1):'0.0';
     document.getElementById('m-dnssec').textContent=dp+'%';
     document.getElementById('m-dnssec-sub').textContent='validados: '+fmt(d.dnssec_ok)+' | inválidos: '+d.dnssec_bad;
     document.getElementById('m-prefetch').textContent=fmt(d.prefetch);
@@ -509,7 +605,6 @@ async function loadStats(){
     document.getElementById('m-unwanted-sub').textContent='respostas: '+fmt(d.unwanted_replies);
 
     // Tipos de consulta
-    const qt=d.qtypes||{};
     const ql=Object.keys(qt).filter(k=>qt[k]>0).sort((a,b)=>qt[b]-qt[a]).slice(0,8);
     if(ql.length>0){
       makeChart('chart-qtypes','bar',{

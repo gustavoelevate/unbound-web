@@ -25,7 +25,14 @@ git clone https://github.com/gustavoelevate/unbound-web.git /opt/unbound-web
 cd /opt/unbound-web
 ```
 
-### 2. Crie o ambiente virtual e instale dependências
+### 2. Instale as dependências do sistema (Debian 12)
+
+```bash
+sudo apt update
+sudo apt install python3-venv python3-dev gcc
+```
+
+### 3. Crie o ambiente virtual e instale dependências Python
 
 ```bash
 python3 -m venv venv
