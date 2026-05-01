@@ -14,24 +14,43 @@ BLOCKLIST_FILE = os.getenv("BLOCKLIST_FILE", "/etc/unbound/blocklist.conf")
 LOG_FILE       = os.getenv("LOG_FILE",       "/var/log/unbound/unbound.log")
 HOST           = os.getenv("HOST",           "0.0.0.0")
 PORT           = int(os.getenv("PORT",       "8080"))
-HISTORY_POINTS = 720  # 12 horas x 60 minutos = 720 pontos (1 por minuto)
+COLLECT_INTERVAL = 30  # segundos entre coletas de historico
+POINTS_PER_HOUR = 3600 // COLLECT_INTERVAL  # 120 pontos/h
+HISTORY_POINTS = 24 * POINTS_PER_HOUR  # 24 horas = 2880 pontos (1 a cada 30s)
 
 if not os.path.exists(BLOCKLIST_FILE):
     open(BLOCKLIST_FILE, "w").close()
 
-# Historia em memoria (720 pontos = 12h)
 history = {
-    "timestamps": deque(maxlen=HISTORY_POINTS),
-    "qps":        deque(maxlen=HISTORY_POINTS),
-    "cachehits":  deque(maxlen=HISTORY_POINTS),
-    "cachemiss":  deque(maxlen=HISTORY_POINTS),
-    "dnssec_ok":  deque(maxlen=HISTORY_POINTS),
-    "dnssec_bad": deque(maxlen=HISTORY_POINTS),
-    "resp_avg":   deque(maxlen=HISTORY_POINTS),
-    "resp_med":   deque(maxlen=HISTORY_POINTS),
+    "timestamps":   deque(maxlen=HISTORY_POINTS),
+    "qps":          deque(maxlen=HISTORY_POINTS),
+    "cachehits":    deque(maxlen=HISTORY_POINTS),
+    "cachemiss":    deque(maxlen=HISTORY_POINTS),
+    "dnssec_ok":    deque(maxlen=HISTORY_POINTS),
+    "dnssec_bad":   deque(maxlen=HISTORY_POINTS),
+    "resp_avg":     deque(maxlen=HISTORY_POINTS),
+    "resp_med":     deque(maxlen=HISTORY_POINTS),
+    "qps_a":        deque(maxlen=HISTORY_POINTS),
+    "qps_aaaa":     deque(maxlen=HISTORY_POINTS),
+    "qps_cname":    deque(maxlen=HISTORY_POINTS),
+    "qps_servfail": deque(maxlen=HISTORY_POINTS),
 }
 last_queries = {"total": 0, "cachehits": 0, "cachemiss": 0, "sum_time": 0, "ts": time.time()}
 sliding_5min = deque(maxlen=60)
+
+
+def get_qtype(d, qtype):
+    for k in (f"num.query.type.{qtype}",
+              f"total.num.queries_type.{qtype}",
+              f"thread0.num.queries_type.{qtype}"):
+        if k in d:
+            return int(d[k])
+    return 0
+
+
+def get_servfail(d):
+    return int(d.get("num.answer.rcode.SERVFAIL",
+                     d.get("total.num.answer.rcode.SERVFAIL", 0)))
 
 
 def parse_stats():
@@ -57,27 +76,37 @@ def collect():
             cachemiss = int(d.get("total.num.cachemiss", 0))
             dnssec_ok_cum = int(d.get("num.answer.secure", d.get("total.num.dnssec_secure", 0)))
             dnssec_bad_cum = int(d.get("num.answer.bogus", d.get("total.num.dnssec_bogus", 0)))
+            qa_cum    = get_qtype(d, "A")
+            qaaaa_cum = get_qtype(d, "AAAA")
+            qcname_cum = get_qtype(d, "CNAME")
+            qsf_cum   = get_servfail(d)
 
-            # Tempo de resposta: média do último minuto
             resp_avg_s = float(d.get("total.recursion.time.avg", 0))
             resp_med_s = float(d.get("total.recursion.time.median", 0))
             sum_time_s = cachemiss * resp_avg_s
 
             if last_queries["total"] == 0:
-                last_queries = {"total": total, "cachehits": cachehits, "cachemiss": cachemiss, "sum_time": sum_time_s, "dnssec_ok": dnssec_ok_cum, "dnssec_bad": dnssec_bad_cum, "ts": now}
-                time.sleep(60)
+                last_queries = {"total": total, "cachehits": cachehits, "cachemiss": cachemiss,
+                                "sum_time": sum_time_s, "dnssec_ok": dnssec_ok_cum, "dnssec_bad": dnssec_bad_cum,
+                                "qa": qa_cum, "qaaaa": qaaaa_cum, "qcname": qcname_cum, "qsf": qsf_cum,
+                                "ts": now}
+                time.sleep(COLLECT_INTERVAL)
                 continue
 
-            elapsed   = now - last_queries["ts"]
-            qps = max(0, (total - last_queries["total"]) / elapsed) if elapsed > 0 else 0
+            elapsed = now - last_queries["ts"]
+            qps  = max(0, (total - last_queries["total"]) / elapsed) if elapsed > 0 else 0
+            qpsa = max(0, (qa_cum - last_queries.get("qa", 0)) / elapsed) if elapsed > 0 else 0
+            qps4 = max(0, (qaaaa_cum - last_queries.get("qaaaa", 0)) / elapsed) if elapsed > 0 else 0
+            qpsc = max(0, (qcname_cum - last_queries.get("qcname", 0)) / elapsed) if elapsed > 0 else 0
+            qpsf = max(0, (qsf_cum - last_queries.get("qsf", 0)) / elapsed) if elapsed > 0 else 0
             ch  = max(0, cachehits - last_queries["cachehits"])
             cm  = max(0, cachemiss - last_queries["cachemiss"])
             dok = max(0, dnssec_ok_cum - last_queries.get("dnssec_ok", 0))
             dbad = max(0, dnssec_bad_cum - last_queries.get("dnssec_bad", 0))
-            
+
             old_sum = last_queries.get("sum_time", 0)
             d_sum = sum_time_s - old_sum
-            
+
             if cm > 0 and cachemiss >= last_queries["cachemiss"]:
                 resp_avg_1m_s = d_sum / cm
             else:
@@ -94,11 +123,18 @@ def collect():
             history["dnssec_bad"].append(dbad)
             history["resp_avg"].append(resp_avg_ms)
             history["resp_med"].append(resp_med_ms)
+            history["qps_a"].append(round(qpsa, 1))
+            history["qps_aaaa"].append(round(qps4, 1))
+            history["qps_cname"].append(round(qpsc, 1))
+            history["qps_servfail"].append(round(qpsf, 1))
 
-            last_queries = {"total": total, "cachehits": cachehits, "cachemiss": cachemiss, "sum_time": sum_time_s, "dnssec_ok": dnssec_ok_cum, "dnssec_bad": dnssec_bad_cum, "ts": now}
+            last_queries = {"total": total, "cachehits": cachehits, "cachemiss": cachemiss,
+                            "sum_time": sum_time_s, "dnssec_ok": dnssec_ok_cum, "dnssec_bad": dnssec_bad_cum,
+                            "qa": qa_cum, "qaaaa": qaaaa_cum, "qcname": qcname_cum, "qsf": qsf_cum,
+                            "ts": now}
         except Exception as e:
             print(f"Collector error: {e}")
-        time.sleep(60)
+        time.sleep(COLLECT_INTERVAL)
 
 threading.Thread(target=collect, daemon=True).start()
 
@@ -205,7 +241,7 @@ def stats():
 @app.route("/api/history")
 def api_history():
     hours = int(request.args.get("hours", 1))
-    points = min(hours * 60, HISTORY_POINTS)
+    points = min(hours * POINTS_PER_HOUR, HISTORY_POINTS)
     ts   = list(history["timestamps"])
     qps  = list(history["qps"])
     ch   = list(history["cachehits"])
@@ -218,20 +254,20 @@ def api_history():
     qaaaa = list(history["qps_aaaa"])
     qcname = list(history["qps_cname"])
     qsf = list(history["qps_servfail"])
-    # Pegar os ultimos N pontos
     return jsonify({
-        "timestamps": ts[-points:],
-        "qps":        qps[-points:],
-        "cachehits":  ch[-points:],
-        "cachemiss":  cm[-points:],
-        "dnssec_ok":  dok[-points:],
-        "dnssec_bad": dbad[-points:],
-        "resp_avg":   ravg[-points:],
-        "resp_med":   rmed[-points:],
-        "qps_a": qa[-points:],
-        "qps_aaaa": qaaaa[-points:],
-        "qps_cname": qcname[-points:],
+        "timestamps":   ts[-points:],
+        "qps":          qps[-points:],
+        "cachehits":    ch[-points:],
+        "cachemiss":    cm[-points:],
+        "dnssec_ok":    dok[-points:],
+        "dnssec_bad":   dbad[-points:],
+        "resp_avg":     ravg[-points:],
+        "resp_med":     rmed[-points:],
+        "qps_a":        qa[-points:],
+        "qps_aaaa":     qaaaa[-points:],
+        "qps_cname":    qcname[-points:],
         "qps_servfail": qsf[-points:],
+        "points_per_hour": POINTS_PER_HOUR,
     })
 
 # API debug - mostrar todas as chaves do unbound-control stats
@@ -453,9 +489,10 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
               <button class="period-btn" onclick="setPeriod(3,this)">3h</button>
               <button class="period-btn" onclick="setPeriod(6,this)">6h</button>
               <button class="period-btn" onclick="setPeriod(12,this)">12h</button>
+              <button class="period-btn" onclick="setPeriod(24,this)">24h</button>
             </div>
           </div>
-          <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">Atualizado a cada 5s | Histórico coletado a cada minuto</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">Atualizado a cada 30s | Histórico coletado a cada 30s</div>
           <div class="chart-wrap"><canvas id="chart-cache"></canvas></div>
         </div>
       </div>
@@ -478,6 +515,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
               <button class="period-btn" onclick="setRespPeriod(3,this)">3h</button>
               <button class="period-btn" onclick="setRespPeriod(6,this)">6h</button>
               <button class="period-btn" onclick="setRespPeriod(12,this)">12h</button>
+              <button class="period-btn" onclick="setRespPeriod(24,this)">24h</button>
             </div>
           </div>
           <div class="chart-wrap"><canvas id="chart-resp"></canvas></div>
@@ -490,7 +528,16 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
     <div class="row g-3">
       <div class="col-md-6">
         <div class="chart-card">
-          <div class="chart-title">DNSSEC (Última Hora)</div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="chart-title mb-0">DNSSEC</div>
+            <div class="period-group">
+              <button class="period-btn active" onclick="setDnssecPeriod(1,this)">1h</button>
+              <button class="period-btn" onclick="setDnssecPeriod(3,this)">3h</button>
+              <button class="period-btn" onclick="setDnssecPeriod(6,this)">6h</button>
+              <button class="period-btn" onclick="setDnssecPeriod(12,this)">12h</button>
+              <button class="period-btn" onclick="setDnssecPeriod(24,this)">24h</button>
+            </div>
+          </div>
           <div class="chart-wrap-sm"><canvas id="chart-dnssec"></canvas></div>
         </div>
       </div>
@@ -563,7 +610,8 @@ function makeChart(id,type,data,opts={}){
 }
 
 // Periodos
-let cachePeriod=1, respPeriod=1, rtPeriod=0;
+const POINTS_PER_HOUR = 120; // historico a cada 30s
+let cachePeriod=1, respPeriod=1, rtPeriod=0, dnssecPeriod=1;
 function setPeriod(h,el){
   cachePeriod=h;
   el.parentNode.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
@@ -572,6 +620,12 @@ function setPeriod(h,el){
 }
 function setRespPeriod(h,el){
   respPeriod=h;
+  el.parentNode.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  loadHistory();
+}
+function setDnssecPeriod(h,el){
+  dnssecPeriod=h;
   el.parentNode.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   loadHistory();
@@ -697,14 +751,14 @@ async function loadStats(){
 // History
 async function loadHistory(){
   try{
-    // Carregar periodo maior entre os graficos
-    const maxH=Math.max(cachePeriod,respPeriod,rtPeriod);
+    const maxH=Math.max(cachePeriod,respPeriod,rtPeriod,dnssecPeriod);
     const r=await fetch('/api/history?hours='+maxH);
     const h=await r.json();
+    const pph=h.points_per_hour||POINTS_PER_HOUR;
 
-    // Calcular pontos para cada grafico
-    const cachePoints=cachePeriod*60;
-    const respPoints=respPeriod*60;
+    const cachePoints=cachePeriod*pph;
+    const respPoints=respPeriod*pph;
+    const dnssecPoints=dnssecPeriod*pph;
     const ts=h.timestamps;
     const tsLen=ts.length;
 
@@ -716,6 +770,10 @@ async function loadHistory(){
     const respTs=ts.slice(-Math.min(respPoints,tsLen));
     const respAvg=h.resp_avg.slice(-Math.min(respPoints,tsLen));
     const respMed=h.resp_med.slice(-Math.min(respPoints,tsLen));
+
+    const dnssecTs=ts.slice(-Math.min(dnssecPoints,tsLen));
+    const dnssecOk=h.dnssec_ok.slice(-Math.min(dnssecPoints,tsLen));
+    const dnssecBad=h.dnssec_bad.slice(-Math.min(dnssecPoints,tsLen));
 
     makeChart('chart-cache','line',{
       labels:cacheTs,
@@ -735,15 +793,15 @@ async function loadHistory(){
     });
 
     makeChart('chart-dnssec','line',{
-      labels:ts.slice(-60),
+      labels:dnssecTs,
       datasets:[
-        {label:'Validados',data:h.dnssec_ok.slice(-60),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.1)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
-        {label:'Inválidos',data:h.dnssec_bad.slice(-60),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
+        {label:'Validados',data:dnssecOk,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.1)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
+        {label:'Inválidos',data:dnssecBad,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
       ]
     });
 
     if(rtPeriod>0){
-      const rtPoints=rtPeriod*60;
+      const rtPoints=rtPeriod*pph;
       const rts=ts.slice(-Math.min(rtPoints,tsLen));
       const rqps=h.qps.slice(-Math.min(rtPoints,tsLen));
       const ra=h.qps_a.slice(-Math.min(rtPoints,tsLen));
@@ -821,10 +879,10 @@ function togglePause(){
   document.getElementById('btn-pause').innerHTML=logPaused?'<i class="bi bi-play-fill"></i> Retomar':'<i class="bi bi-pause-fill"></i> Pausar';
 }
 
-// Init: stats a cada 5s, history a cada 60s
+// Init: stats a cada 5s, history a cada 30s
 loadAll();
 setInterval(loadStats,5000);
-setInterval(loadHistory,60000);
+setInterval(loadHistory,30000);
 setInterval(loadBlockedCount,30000);
 </script>
 </body>
