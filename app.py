@@ -390,72 +390,122 @@ HTML = r"""<!DOCTYPE html>
 <link rel="icon" type="image/png" href="/static/favicon.png?v=2"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Cinzel:wght@400;500;600&family=Italianno&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
-:root{--bg:#f8f9fc;--card:#fff;--border:#e5e9f0;--text:#1a1d2e;--muted:#6b7280;--primary:#3b82f6;--success:#10b981;--danger:#ef4444;--warning:#f59e0b;--nav-hover:#eff6ff;--domain-bg:#f1f5f9;}
-[data-theme="dark"]{--bg:#0f172a;--card:#1e293b;--border:#334155;--text:#f8fafc;--muted:#94a3b8;--nav-hover:#334155;--domain-bg:#0f172a;}
+:root{
+  --bg:#f8f7fb;
+  --bg-grad:linear-gradient(135deg,#ffffff 0%,#f1eef8 100%);
+  --card:#fff;
+  --border:#e4e0ef;
+  --text:#1c1836;
+  --muted:#666085;
+  --primary:#6a1e9c;
+  --primary-dark:#282362;
+  --primary-light:#9d59ca;
+  --primary-soft:#f3edf9;
+  --success:#10b981;
+  --danger:#ef4444;
+  --warning:#f59e0b;
+  --nav-hover:#f3edf9;
+  --domain-bg:#f3edf9;
+}
+[data-theme="dark"]{
+  --bg:#14112e;
+  --bg-grad:linear-gradient(135deg,#181438 0%,#0f0d23 100%);
+  --card:#211d47;
+  --border:#352e68;
+  --text:#f8f7fb;
+  --muted:#a39dc1;
+  --primary:#9d59ca;
+  --primary-dark:#6a1e9c;
+  --primary-light:#c596e8;
+  --primary-soft:#352e68;
+  --nav-hover:#352e68;
+  --domain-bg:#1c1836;
+}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;font-size:14px;transition:background 0.3s, color 0.3s;}
+body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);font-family:'Inter','Segoe UI',sans-serif;font-size:14px;font-feature-settings:'cv11','ss01';transition:color 0.3s;}
 .sidebar{width:220px;min-height:100vh;background:var(--card);border-right:1px solid var(--border);position:fixed;top:0;left:0;z-index:100;transition:background 0.3s, border-color 0.3s;}
-.brand{padding:20px;font-size:1rem;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
-.nav-item{padding:10px 20px;display:flex;align-items:center;gap:10px;color:var(--text);cursor:pointer;border-left:3px solid transparent;transition:.15s;font-size:.875rem;}
+.brand{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;}
+.brand-logo{width:54px;height:54px;object-fit:contain;flex-shrink:0;border-radius:50%;background:#fff;padding:4px;}
+.brand-text{display:flex;flex-direction:column;line-height:1;}
+.brand-text .top{font-family:'Cinzel',serif;font-size:1.45rem;font-weight:500;letter-spacing:.06em;color:var(--primary-dark);}
+[data-theme="dark"] .brand-text .top{color:var(--primary-light);}
+.brand-text .bot{font-family:'Italianno',cursive;font-size:1.6rem;font-weight:400;color:var(--primary);margin-top:-4px;letter-spacing:.01em;line-height:.9;}
+.nav-item{padding:11px 22px;display:flex;align-items:center;gap:10px;color:var(--text);cursor:pointer;border-left:3px solid transparent;transition:.15s;font-size:.875rem;font-weight:500;}
 .nav-item:hover{background:var(--nav-hover);color:var(--primary);}
 .nav-item.active{background:var(--nav-hover);color:var(--primary);border-left-color:var(--primary);font-weight:600;}
 .main{margin-left:220px;padding:28px;min-height:100vh;}
 .page{display:none;}.page.active{display:block;}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:10px;}
-.topbar h4{font-size:1.1rem;font-weight:700;}
+.topbar h4{font-family:'Cinzel',serif;font-size:1.85rem;font-weight:500;letter-spacing:.06em;color:var(--primary-dark);display:flex;align-items:center;gap:14px;margin:0;}
+[data-theme="dark"] .topbar h4{color:var(--primary-light);}
+.topbar h4 .net{font-family:'Italianno',cursive;font-size:1.75rem;font-weight:400;color:var(--primary);letter-spacing:.01em;margin-left:-4px;line-height:.9;}
+.topbar-logo{width:64px;height:64px;object-fit:contain;border-radius:50%;background:#fff;padding:4px;}
 .badge-status{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:.78rem;font-weight:600;}
 .badge-active{background:#d1fae5;color:#065f46;}.badge-inactive{background:#fee2e2;color:#991b1b;}
 .dot{width:7px;height:7px;border-radius:50%;}.dot-green{background:#10b981;}.dot-red{background:#ef4444;}
-.section-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:12px;}
-.metric-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;transition:background 0.3s, border-color 0.3s;}
-.metric-card .label{font-size:.75rem;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:5px;}
-.metric-card .value{font-size:1.65rem;font-weight:700;color:var(--text);line-height:1;}
+.section-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--primary);margin-bottom:12px;}
+.metric-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;transition:background 0.3s, border-color 0.3s, transform 0.15s;}
+.metric-card:hover{border-color:var(--primary-light);}
+.metric-card .label{font-size:.75rem;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:5px;font-weight:500;}
+.metric-card .value{font-size:1.65rem;font-weight:700;color:var(--text);line-height:1;letter-spacing:-.01em;}
 .metric-card .sub{font-size:.72rem;margin-top:5px;}
 .sub-green{color:var(--success);}.sub-yellow{color:var(--warning);}.sub-blue{color:var(--primary);}
+.text-primary{color:var(--primary)!important;}
+.text-info{color:var(--primary-light)!important;}
 .chart-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;transition:background 0.3s, border-color 0.3s;}
-.chart-title{font-size:.8rem;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:5px;}
+.chart-title{font-size:.85rem;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px;color:var(--text);}
 .chart-wrap{position:relative;height:200px;}.chart-wrap-sm{position:relative;height:160px;}
-.refresh-btn{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 14px;cursor:pointer;font-size:.8rem;transition:.15s;display:inline-flex;align-items:center;gap:5px;}
-.refresh-btn:hover{border-color:var(--primary);color:var(--primary);}
-.period-btn{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.75rem;transition:.15s;}
-.period-btn:hover,.period-btn.active{background:var(--primary);border-color:var(--primary);color:#fff;}
+.refresh-btn{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 14px;cursor:pointer;font-size:.8rem;transition:.15s;display:inline-flex;align-items:center;gap:5px;font-weight:500;}
+.refresh-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft);}
+.period-btn{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.75rem;transition:.15s;font-weight:500;}
+.period-btn:hover{border-color:var(--primary);color:var(--primary);}
+.period-btn.active{background:var(--primary);border-color:var(--primary);color:#fff;}
 .tooltip-icon{color:var(--muted);font-size:.75rem;cursor:help;}
 .domain-tag{display:inline-flex;align-items:center;gap:6px;background:var(--domain-bg);border:1px solid var(--border);border-radius:6px;padding:4px 10px;margin:3px;font-size:.8rem;color:var(--text);}
 .domain-tag .del{cursor:pointer;color:var(--danger);font-size:.75rem;}
 .domain-tag .del:hover{color:#b91c1c;}
-#search-domain{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;width:100%;font-size:.85rem;outline:none;color:var(--text);}
-#search-domain:focus{border-color:var(--primary);}
-#log-box{background:#0f1117;border:1px solid var(--border);border-radius:8px;height:500px;overflow-y:auto;padding:12px;font-family:monospace;font-size:.75rem;color:#94a3b8;}
+#search-domain{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;width:100%;font-size:.85rem;outline:none;color:var(--text);font-family:inherit;}
+#search-domain:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+#new-domain{font-family:inherit;}
+#new-domain:focus{border-color:var(--primary)!important;box-shadow:0 0 0 3px var(--primary-soft)!important;}
+.btn-danger{background:var(--primary)!important;border-color:var(--primary)!important;}
+.btn-danger:hover{background:var(--primary-dark)!important;border-color:var(--primary-dark)!important;}
+#log-box{background:#0f0820;border:1px solid var(--border);border-radius:8px;height:500px;overflow-y:auto;padding:12px;font-family:'Menlo','Consolas',monospace;font-size:.75rem;color:#a89dc4;}
 #log-box .line{padding:1px 0;white-space:pre-wrap;word-break:break-all;}
-#log-box .line:hover{color:#e2e8f0;}
+#log-box .line:hover{color:#e2d9f5;}
 .live-dot{width:7px;height:7px;background:var(--success);border-radius:50%;display:inline-block;animation:pulse 1.5s infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;}
 .period-group{display:flex;gap:4px;align-items:center;}
+#theme-toggle{padding:6px 10px;}
 </style>
 </head>
 <body>
 <div class="sidebar">
-  <div class="brand" style="font-size: 1.4rem; cursor: pointer;" onclick="showPage('dashboard', document.querySelectorAll('.nav-item')[0])"><img src="/static/logo.png" style="width: 60px; height: 60px; margin-right: 12px; object-fit: contain; background-color: white; border-radius: 50%; padding: 5px;" alt="Logo"/> Elevate</div>
+  <div class="brand" onclick="showPage('dashboard', document.querySelectorAll('.nav-item')[0])">
+    <img src="/static/logo.png" class="brand-logo" alt="Elevate Network"/>
+    <div class="brand-text"><span class="top">ELEVATE</span><span class="bot">Network</span></div>
+  </div>
   <div style="padding:16px 0">
     <div class="nav-item active" onclick="showPage('dashboard',this)"><i class="bi bi-speedometer2"></i> Dashboard</div>
     <div class="nav-item" onclick="showPage('blocklist',this)"><i class="bi bi-slash-circle"></i> Bloqueios</div>
     <div class="nav-item" onclick="showPage('logs',this)"><i class="bi bi-terminal"></i> Logs</div>
   </div>
 </div>
-<button id="theme-toggle" class="btn btn-sm btn-outline-secondary" style="position: fixed; top: 20px; right: 28px; z-index: 1000;" onclick="toggleTheme()" title="Alternar Tema">
-  <i class="bi bi-moon-fill" id="theme-icon"></i>
-</button>
 <div class="main">
 
   <!-- DASHBOARD -->
   <div id="page-dashboard" class="page active">
     <div class="topbar">
-      <h4><img src="/static/logo.png" style="width: 80px; height: 80px; object-fit: contain; background-color: white; border-radius: 50%; padding: 6px;" class="me-3" alt="Logo"/>DNS Elevate</h4>
+      <h4><img src="/static/logo.png" class="topbar-logo" alt="Logo"/><span>ELEVATE <span class="net">Network</span></span><span style="font-family:'Inter',sans-serif;font-size:.85rem;font-weight:500;color:var(--muted);letter-spacing:.02em;margin-left:6px;">DNS Manager</span></h4>
       <div class="d-flex align-items-center gap-2">
         <button class="refresh-btn" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+        <button id="theme-toggle" class="refresh-btn" onclick="toggleTheme()" title="Alternar Tema"><i class="bi bi-moon-fill" id="theme-icon"></i></button>
         <span id="status-badge" class="badge-status badge-active"><span class="dot dot-green"></span> Unbound Ativo</span>
       </div>
     </div>
@@ -472,7 +522,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
       <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">TOTAL Queries</div><div class="value text-primary" id="m-tot-q" style="font-size:1.8rem">—</div></div></div>
       <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">Type A</div><div class="value text-success" id="m-tot-a" style="font-size:1.8rem">—</div></div></div>
       <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">Type AAAA</div><div class="value text-warning" id="m-tot-aaaa" style="font-size:1.8rem">—</div></div></div>
-      <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">Type CNAME</div><div class="value" style="color:#8b5cf6;font-size:1.8rem;" id="m-tot-cname">—</div></div></div>
+      <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">Type CNAME</div><div class="value" style="color:var(--primary-light);font-size:1.8rem;" id="m-tot-cname">—</div></div></div>
       <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">SERVFAIL</div><div class="value text-danger" id="m-tot-servfail" style="font-size:1.8rem">—</div></div></div>
       <div class="col-md-2"><div class="metric-card" style="text-align:center"><div class="label justify-content-center">Cache Hits</div><div class="value text-info" id="m-tot-hits" style="font-size:1.8rem">—</div></div></div>
     </div>
@@ -481,7 +531,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
       <div class="col-12">
         <div class="chart-card">
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <div class="chart-title mb-0"><i class="bi bi-activity text-danger"></i> Consultas DNS</div>
+            <div class="chart-title mb-0"><i class="bi bi-activity text-primary"></i> Consultas DNS</div>
             <div class="period-group">
               <button class="period-btn active" onclick="setRtPeriod(0,this)">5 Min</button>
               <button class="period-btn" onclick="setRtPeriod(1,this)">1h</button>
@@ -627,19 +677,41 @@ function showToast(msg,ok=true){
 }
 function fmt(n){return Number(n).toLocaleString('pt-BR');}
 
-// Charts
-let charts={};
-const CO={
-  responsive:true,maintainAspectRatio:false,animation:false,
-  plugins:{legend:{labels:{color:'#6b7280',font:{size:11},boxWidth:12}}},
-  scales:{
-    x:{ticks:{color:'#9ca3af',font:{size:10},maxTicksLimit:10},grid:{color:'#f1f5f9'}},
-    y:{ticks:{color:'#9ca3af',font:{size:10}},grid:{color:'#f1f5f9'}}
-  }
+// Charts - Paleta Elevate (roxos + cores semânticas)
+const PALETTE={
+  primary:'#6a1e9c',
+  primaryDark:'#282362',
+  lavender:'#9d59ca',
+  lavenderLight:'#c596e8',
+  indigo:'#4b42ad',
+  deepPurple:'#1c1836',
+  success:'#10b981',
+  danger:'#ef4444',
+  warning:'#f59e0b',
+  cyan:'#06b6d4',
 };
+let charts={};
+function chartColors(){
+  const dark=document.body.getAttribute('data-theme')==='dark';
+  return {
+    text: dark?'#a89dc4':'#6b6783',
+    grid: dark?'rgba(167,139,250,.08)':'rgba(124,58,237,.08)',
+  };
+}
+function chartOptions(){
+  const c=chartColors();
+  return {
+    responsive:true,maintainAspectRatio:false,animation:false,
+    plugins:{legend:{labels:{color:c.text,font:{size:11,family:'Inter'},boxWidth:12}}},
+    scales:{
+      x:{ticks:{color:c.text,font:{size:10,family:'Inter'},maxTicksLimit:10},grid:{color:c.grid}},
+      y:{ticks:{color:c.text,font:{size:10,family:'Inter'}},grid:{color:c.grid}}
+    }
+  };
+}
 function makeChart(id,type,data,opts={}){
   if(charts[id])charts[id].destroy();
-  charts[id]=new Chart(document.getElementById(id),{type,data,options:{...CO,...opts}});
+  charts[id]=new Chart(document.getElementById(id),{type,data,options:{...chartOptions(),...opts}});
 }
 
 // Periodos
@@ -683,11 +755,11 @@ function renderRtChart(labels, total, a, aaaa, cname, sf) {
     makeChart('chart-realtime','line',{
       labels:labels,
       datasets:[
-        {label:'Total QPS',data:total,borderColor:'#3b82f6',tension:.4,pointRadius:0,borderWidth:2},
-        {label:'A QPS',data:a,borderColor:'#10b981',tension:.4,pointRadius:0,borderWidth:1.5},
-        {label:'AAAA QPS',data:aaaa,borderColor:'#f59e0b',tension:.4,pointRadius:0,borderWidth:1.5},
-        {label:'CNAME QPS',data:cname,borderColor:'#8b5cf6',tension:.4,pointRadius:0,borderWidth:1.5},
-        {label:'SERVFAIL',data:sf,borderColor:'#ef4444',tension:.4,pointRadius:0,borderWidth:1.5}
+        {label:'Total QPS',data:total,borderColor:PALETTE.primary,tension:.4,pointRadius:0,borderWidth:2.5},
+        {label:'A QPS',data:a,borderColor:PALETTE.indigo,tension:.4,pointRadius:0,borderWidth:1.5},
+        {label:'AAAA QPS',data:aaaa,borderColor:PALETTE.warning,tension:.4,pointRadius:0,borderWidth:1.5},
+        {label:'CNAME QPS',data:cname,borderColor:PALETTE.lavender,tension:.4,pointRadius:0,borderWidth:1.5},
+        {label:'SERVFAIL',data:sf,borderColor:PALETTE.danger,tension:.4,pointRadius:0,borderWidth:1.5}
       ]
     },{animation:{duration:0}});
   }
@@ -775,7 +847,7 @@ async function loadStats(){
     if(ql.length>0){
       makeChart('chart-qtypes','bar',{
         labels:ql,
-        datasets:[{data:ql.map(k=>qt[k]),backgroundColor:['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16'],borderRadius:5,borderWidth:0}]
+        datasets:[{data:ql.map(k=>qt[k]),backgroundColor:[PALETTE.primary,PALETTE.lavender,PALETTE.indigo,PALETTE.deepPurple,PALETTE.success,PALETTE.warning,PALETTE.cyan,PALETTE.danger],borderRadius:5,borderWidth:0}]
       },{plugins:{legend:{display:false}}});
     }
   }catch(e){console.error('stats error:',e);}
@@ -811,25 +883,25 @@ async function loadHistory(){
     makeChart('chart-cache','line',{
       labels:cacheTs,
       datasets:[
-        {label:'Consultas/s',data:cacheQps,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.06)',tension:.4,fill:false,pointRadius:0,borderWidth:1.5},
-        {label:'Cache Hits',data:cacheCh,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.1)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
-        {label:'Cache Miss',data:cacheCm,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
+        {label:'Consultas/s',data:cacheQps,borderColor:PALETTE.primary,backgroundColor:'rgba(124,58,237,.06)',tension:.4,fill:false,pointRadius:0,borderWidth:1.8},
+        {label:'Cache Hits',data:cacheCh,borderColor:PALETTE.success,backgroundColor:'rgba(16,185,129,.1)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
+        {label:'Cache Miss',data:cacheCm,borderColor:PALETTE.danger,backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
       ]
     });
 
     makeChart('chart-resp','line',{
       labels:respTs,
       datasets:[
-        {label:'Médio (ms)',data:respAvg,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.08)',tension:.4,fill:false,pointRadius:0,borderWidth:1.5},
-        {label:'Mediano (ms)',data:respMed,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.08)',tension:.4,fill:false,pointRadius:0,borderWidth:1.5},
+        {label:'Médio (ms)',data:respAvg,borderColor:PALETTE.primary,backgroundColor:'rgba(124,58,237,.08)',tension:.4,fill:false,pointRadius:0,borderWidth:1.8},
+        {label:'Mediano (ms)',data:respMed,borderColor:PALETTE.lavender,backgroundColor:'rgba(167,139,250,.08)',tension:.4,fill:false,pointRadius:0,borderWidth:1.5},
       ]
     });
 
     makeChart('chart-dnssec','line',{
       labels:dnssecTs,
       datasets:[
-        {label:'Validados',data:dnssecOk,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.1)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
-        {label:'Inválidos',data:dnssecBad,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
+        {label:'Validados',data:dnssecOk,borderColor:PALETTE.success,backgroundColor:'rgba(16,185,129,.1)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
+        {label:'Inválidos',data:dnssecBad,borderColor:PALETTE.danger,backgroundColor:'rgba(239,68,68,.08)',tension:.4,fill:true,pointRadius:0,borderWidth:1.5},
       ]
     });
 
