@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request, Response
 import subprocess
 import re
 import os
+import json
 import time
 import threading
 from collections import deque
@@ -12,6 +13,7 @@ app = Flask(__name__)
 
 BLOCKLIST_FILE = os.getenv("BLOCKLIST_FILE", "/etc/unbound/blocklist.conf")
 LOG_FILE       = os.getenv("LOG_FILE",       "/var/log/unbound/unbound.log")
+HISTORY_FILE   = os.getenv("HISTORY_FILE",   "/var/lib/unbound-web/history.json")
 HOST           = os.getenv("HOST",           "0.0.0.0")
 PORT           = int(os.getenv("PORT",       "8080"))
 COLLECT_INTERVAL = 30  # segundos entre coletas de historico
@@ -21,22 +23,39 @@ HISTORY_POINTS = 24 * POINTS_PER_HOUR  # 24 horas = 2880 pontos (1 a cada 30s)
 if not os.path.exists(BLOCKLIST_FILE):
     open(BLOCKLIST_FILE, "w").close()
 
-history = {
-    "timestamps":   deque(maxlen=HISTORY_POINTS),
-    "qps":          deque(maxlen=HISTORY_POINTS),
-    "cachehits":    deque(maxlen=HISTORY_POINTS),
-    "cachemiss":    deque(maxlen=HISTORY_POINTS),
-    "dnssec_ok":    deque(maxlen=HISTORY_POINTS),
-    "dnssec_bad":   deque(maxlen=HISTORY_POINTS),
-    "resp_avg":     deque(maxlen=HISTORY_POINTS),
-    "resp_med":     deque(maxlen=HISTORY_POINTS),
-    "qps_a":        deque(maxlen=HISTORY_POINTS),
-    "qps_aaaa":     deque(maxlen=HISTORY_POINTS),
-    "qps_cname":    deque(maxlen=HISTORY_POINTS),
-    "qps_servfail": deque(maxlen=HISTORY_POINTS),
-}
+HISTORY_KEYS = (
+    "timestamps", "qps", "cachehits", "cachemiss",
+    "dnssec_ok", "dnssec_bad", "resp_avg", "resp_med",
+    "qps_a", "qps_aaaa", "qps_cname", "qps_servfail",
+)
+history = {k: deque(maxlen=HISTORY_POINTS) for k in HISTORY_KEYS}
 last_queries = {"total": 0, "cachehits": 0, "cachemiss": 0, "sum_time": 0, "ts": time.time()}
 sliding_5min = deque(maxlen=60)
+
+
+def save_history():
+    try:
+        os.makedirs(os.path.dirname(HISTORY_FILE) or ".", exist_ok=True)
+        tmp = HISTORY_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump({k: list(history[k]) for k in HISTORY_KEYS}, f)
+        os.replace(tmp, HISTORY_FILE)
+    except Exception as e:
+        print(f"save_history error: {e}")
+
+
+def load_history():
+    if not os.path.exists(HISTORY_FILE):
+        return
+    try:
+        with open(HISTORY_FILE) as f:
+            data = json.load(f)
+        for k in HISTORY_KEYS:
+            for item in data.get(k, [])[-HISTORY_POINTS:]:
+                history[k].append(item)
+        print(f"Loaded {len(history['timestamps'])} pontos do historico")
+    except Exception as e:
+        print(f"load_history error: {e}")
 
 
 def get_qtype(d, qtype):
@@ -132,10 +151,12 @@ def collect():
                             "sum_time": sum_time_s, "dnssec_ok": dnssec_ok_cum, "dnssec_bad": dnssec_bad_cum,
                             "qa": qa_cum, "qaaaa": qaaaa_cum, "qcname": qcname_cum, "qsf": qsf_cum,
                             "ts": now}
+            save_history()
         except Exception as e:
             print(f"Collector error: {e}")
         time.sleep(COLLECT_INTERVAL)
 
+load_history()
 threading.Thread(target=collect, daemon=True).start()
 
 # API Stats
