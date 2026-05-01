@@ -500,7 +500,8 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 
   <!-- DASHBOARD -->
   <div id="page-dashboard" class="page active">
-    <div class="topbar" style="justify-content: flex-end;">
+    <div class="topbar" style="justify-content: space-between;">
+      <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 40px; object-fit: contain; margin-left: 4px;"/>
       <div class="d-flex align-items-center gap-2">
         <button class="refresh-btn" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
         <button id="theme-toggle" class="refresh-btn" onclick="toggleTheme()" title="Alternar Tema"><i class="bi bi-moon-fill" id="theme-icon"></i></button>
