@@ -289,21 +289,30 @@ def read_blocklist():
     return domains
 
 def write_blocklist(domains):
+    # Cabecalho "server:" e necessario porque blocklist.conf e incluido fora
+    # da clausula server: do unbound.conf, e local-zone so e valido dentro dela.
     with open(BLOCKLIST_FILE, "w") as f:
+        f.write("server:\n")
         for d in sorted(set(domains)):
-            f.write(f'local-zone: "{d}" always_nxdomain\n')
+            f.write(f'    local-zone: "{d}" always_nxdomain\n')
 
 def sanitize_domain(raw):
-    # Remove formato markdown [texto](url) -> texto
     cleaned = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', raw)
-    # Remove http:// ou https://
     cleaned = re.sub(r'https?://', '', cleaned)
-    # Remove barras e espacos
     cleaned = cleaned.strip().strip('/').lower()
     return cleaned
 
-def reload_unbound():
-    subprocess.run(["unbound-control", "reload"], check=True)
+def apply_blocklist(domains, previous):
+    """Escreve a blocklist e recarrega o Unbound; reverte em caso de erro."""
+    write_blocklist(domains)
+    check = subprocess.run(["unbound-checkconf"], capture_output=True, text=True)
+    if check.returncode != 0:
+        write_blocklist(previous)
+        raise RuntimeError(check.stderr.strip() or check.stdout.strip() or "unbound-checkconf falhou")
+    reload = subprocess.run(["unbound-control", "reload"], capture_output=True, text=True)
+    if reload.returncode != 0:
+        write_blocklist(previous)
+        raise RuntimeError(reload.stderr.strip() or reload.stdout.strip() or "unbound-control reload falhou")
 
 @app.route("/api/blocklist", methods=["GET"])
 def blocklist_get():
@@ -318,9 +327,10 @@ def blocklist_add():
     domains = read_blocklist()
     if domain in domains:
         return jsonify({"error": "Dominio ja bloqueado"}), 409
-    domains.append(domain)
-    write_blocklist(domains)
-    reload_unbound()
+    try:
+        apply_blocklist(domains + [domain], domains)
+    except Exception as e:
+        return jsonify({"error": f"Falha ao aplicar bloqueio: {e}"}), 500
     return jsonify({"ok": True, "domain": domain})
 
 @app.route("/api/blocklist/<domain>", methods=["DELETE"])
@@ -329,9 +339,11 @@ def blocklist_delete(domain):
     domains = read_blocklist()
     if domain not in domains:
         return jsonify({"error": "Dominio nao encontrado"}), 404
-    domains.remove(domain)
-    write_blocklist(domains)
-    reload_unbound()
+    new_domains = [d for d in domains if d != domain]
+    try:
+        apply_blocklist(new_domains, domains)
+    except Exception as e:
+        return jsonify({"error": f"Falha ao remover bloqueio: {e}"}), 500
     return jsonify({"ok": True})
 
 # Logs SSE
