@@ -258,6 +258,7 @@ HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>DNS Recursivo</title>
+<link rel="icon" type="image/png" href="/static/logo.png"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -307,7 +308,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
 </head>
 <body>
 <div class="sidebar">
-  <div class="brand"><i class="bi bi-globe2"></i> DNS Manager</div>
+  <div class="brand"><img src="/static/logo.png" style="width: 24px; height: 24px; margin-right: 5px; object-fit: contain;" alt="Logo"/> DNS Manager</div>
   <div style="padding:16px 0">
     <div class="nav-item active" onclick="showPage('dashboard',this)"><i class="bi bi-speedometer2"></i> Dashboard</div>
     <div class="nav-item" onclick="showPage('blocklist',this)"><i class="bi bi-slash-circle"></i> Bloqueios</div>
@@ -319,7 +320,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
   <!-- DASHBOARD -->
   <div id="page-dashboard" class="page active">
     <div class="topbar">
-      <h4><i class="bi bi-globe2 me-2 text-primary"></i>DNS Recursivo</h4>
+      <h4><img src="/static/logo.png" style="width: 28px; height: 28px; object-fit: contain;" class="me-2" alt="Logo"/>DNS Recursivo</h4>
       <div class="d-flex align-items-center gap-2">
         <button class="refresh-btn" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
         <span id="status-badge" class="badge-status badge-active"><span class="dot dot-green"></span> Unbound Ativo</span>
