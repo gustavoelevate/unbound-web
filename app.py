@@ -487,9 +487,8 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 </head>
 <body>
 <div class="sidebar">
-  <div class="brand" onclick="showPage('dashboard', document.querySelectorAll('.nav-item')[0])">
-    <img src="/static/logo.png" class="brand-logo" alt="Elevate Network"/>
-    <div class="brand-text"><span class="top">ELEVATE</span><span class="bot">Network</span></div>
+  <div class="brand" onclick="showPage('dashboard', document.querySelectorAll('.nav-item')[0])" style="justify-content:center; padding:22px 16px;">
+    <img src="/static/logo.png" alt="Elevate Network" style="max-width:100%; max-height:60px; object-fit:contain;"/>
   </div>
   <div style="padding:16px 0">
     <div class="nav-item active" onclick="showPage('dashboard',this)"><i class="bi bi-speedometer2"></i> Dashboard</div>
@@ -501,8 +500,7 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 
   <!-- DASHBOARD -->
   <div id="page-dashboard" class="page active">
-    <div class="topbar">
-      <h4><img src="/static/logo.png" class="topbar-logo" alt="Logo"/><span>ELEVATE <span class="net">Network</span></span><span style="font-family:'Inter',sans-serif;font-size:.85rem;font-weight:500;color:var(--muted);letter-spacing:.02em;margin-left:6px;">DNS Manager</span></h4>
+    <div class="topbar" style="justify-content: flex-end;">
       <div class="d-flex align-items-center gap-2">
         <button class="refresh-btn" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
         <button id="theme-toggle" class="refresh-btn" onclick="toggleTheme()" title="Alternar Tema"><i class="bi bi-moon-fill" id="theme-icon"></i></button>
