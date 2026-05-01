@@ -308,7 +308,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
 </head>
 <body>
 <div class="sidebar">
-  <div class="brand"><img src="/static/logo.png" style="width: 24px; height: 24px; margin-right: 5px; object-fit: contain;" alt="Logo"/> DNS Manager</div>
+  <div class="brand"><img src="/static/logo.png" style="width: 24px; height: 24px; margin-right: 5px; object-fit: contain; background-color: white; border-radius: 50%; padding: 2px;" alt="Logo"/> DNS Manager</div>
   <div style="padding:16px 0">
     <div class="nav-item active" onclick="showPage('dashboard',this)"><i class="bi bi-speedometer2"></i> Dashboard</div>
     <div class="nav-item" onclick="showPage('blocklist',this)"><i class="bi bi-slash-circle"></i> Bloqueios</div>
@@ -320,7 +320,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
   <!-- DASHBOARD -->
   <div id="page-dashboard" class="page active">
     <div class="topbar">
-      <h4><img src="/static/logo.png" style="width: 28px; height: 28px; object-fit: contain;" class="me-2" alt="Logo"/>DNS Recursivo</h4>
+      <h4><img src="/static/logo.png" style="width: 28px; height: 28px; object-fit: contain; background-color: white; border-radius: 50%; padding: 2px;" class="me-2" alt="Logo"/>DNS Recursivo</h4>
       <div class="d-flex align-items-center gap-2">
         <button class="refresh-btn" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
         <span id="status-badge" class="badge-status badge-active"><span class="dot dot-green"></span> Unbound Ativo</span>
