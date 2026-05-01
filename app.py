@@ -30,7 +30,9 @@ history = {
     "resp_avg":   deque(maxlen=HISTORY_POINTS),
     "resp_med":   deque(maxlen=HISTORY_POINTS),
 }
-last_queries = {"total": 0, "cachehits": 0, "cachemiss": 0, "ts": time.time()}
+last_queries = {"total": 0, "cachehits": 0, "cachemiss": 0, "sum_time": 0, "ts": time.time()}
+sliding_5min = deque(maxlen=60)
+
 
 def parse_stats():
     try:
@@ -58,11 +60,20 @@ def collect():
             ch  = max(0, cachehits - last_queries["cachehits"])
             cm  = max(0, cachemiss - last_queries["cachemiss"])
 
-            # Tempo de resposta: unbound retorna em segundos, converter para ms
+            # Tempo de resposta: média do último minuto
             resp_avg_s = float(d.get("total.recursion.time.avg", 0))
             resp_med_s = float(d.get("total.recursion.time.median", 0))
-            # Valores acima de 10s sao anomalias (acumulado), ignorar
-            resp_avg_ms = round(resp_avg_s * 1000, 3) if resp_avg_s < 10 else 0
+            sum_time_s = cachemiss * resp_avg_s
+            
+            old_sum = last_queries.get("sum_time", 0)
+            d_sum = sum_time_s - old_sum
+            
+            if cm > 0 and cachemiss >= last_queries["cachemiss"]:
+                resp_avg_1m_s = d_sum / cm
+            else:
+                resp_avg_1m_s = resp_avg_s
+
+            resp_avg_ms = round(resp_avg_1m_s * 1000, 3) if resp_avg_1m_s < 10 else 0
             resp_med_ms = round(resp_med_s * 1000, 3) if resp_med_s < 10 else 0
 
             history["timestamps"].append(datetime.now().strftime("%H:%M"))
@@ -74,7 +85,7 @@ def collect():
             history["resp_avg"].append(resp_avg_ms)
             history["resp_med"].append(resp_med_ms)
 
-            last_queries = {"total": total, "cachehits": cachehits, "cachemiss": cachemiss, "ts": now}
+            last_queries = {"total": total, "cachehits": cachehits, "cachemiss": cachemiss, "sum_time": sum_time_s, "ts": now}
         except Exception as e:
             print(f"Collector error: {e}")
         time.sleep(60)
@@ -95,10 +106,24 @@ def stats():
         elapsed = now - last_queries["ts"]
         qps     = round(max(0, (queries - last_queries["total"]) / elapsed), 1) if elapsed > 0 else 0
 
-        # Tempo de resposta correto
+        # Tempo de resposta (média dos últimos 5 minutos)
         resp_avg_s = float(d.get("total.recursion.time.avg", 0))
         resp_med_s = float(d.get("total.recursion.time.median", 0))
-        resp_avg_ms = round(resp_avg_s * 1000, 3) if resp_avg_s < 10 else 0
+        sum_time_s = cachemiss * resp_avg_s
+        
+        if len(sliding_5min) > 0 and cachemiss < sliding_5min[-1][0]:
+            sliding_5min.clear()
+        sliding_5min.append((cachemiss, sum_time_s))
+        
+        if len(sliding_5min) > 1:
+            old_cm, old_sum = sliding_5min[0]
+            d_cm = cachemiss - old_cm
+            d_sum = sum_time_s - old_sum
+            resp_avg_5m_s = (d_sum / d_cm) if d_cm > 0 else 0
+        else:
+            resp_avg_5m_s = resp_avg_s
+            
+        resp_avg_ms = round(resp_avg_5m_s * 1000, 3) if resp_avg_5m_s < 10 else 0
         resp_med_ms = round(resp_med_s * 1000, 3) if resp_med_s < 10 else 0
 
         # Tipos de consulta - usar num_queries_type
