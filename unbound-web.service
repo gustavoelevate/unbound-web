@@ -1,0 +1,13 @@
+[Unit]
+Description=Unbound DNS Web Interface
+After=network.target unbound.service
+
+[Service]
+ExecStart=/opt/unbound-web/venv/bin/python /opt/unbound-web/app.py
+WorkingDirectory=/opt/unbound-web
+EnvironmentFile=/opt/unbound-web/.env
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
