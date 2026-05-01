@@ -257,7 +257,7 @@ HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>DNS Recursivo</title>
+<title>DNS Elevate</title>
 <link rel="icon" type="image/png" href="/static/favicon.png?v=2"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
@@ -308,7 +308,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
 </head>
 <body>
 <div class="sidebar">
-  <div class="brand" style="font-size: 1.4rem;"><img src="/static/logo.png" style="width: 60px; height: 60px; margin-right: 12px; object-fit: contain; background-color: white; border-radius: 50%; padding: 5px;" alt="Logo"/> DNS Manager</div>
+  <div class="brand" style="font-size: 1.4rem; cursor: pointer;" onclick="showPage('dashboard', document.querySelectorAll('.nav-item')[0])"><img src="/static/logo.png" style="width: 60px; height: 60px; margin-right: 12px; object-fit: contain; background-color: white; border-radius: 50%; padding: 5px;" alt="Logo"/> Elevate</div>
   <div style="padding:16px 0">
     <div class="nav-item active" onclick="showPage('dashboard',this)"><i class="bi bi-speedometer2"></i> Dashboard</div>
     <div class="nav-item" onclick="showPage('blocklist',this)"><i class="bi bi-slash-circle"></i> Bloqueios</div>
@@ -320,7 +320,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;fo
   <!-- DASHBOARD -->
   <div id="page-dashboard" class="page active">
     <div class="topbar">
-      <h4><img src="/static/logo.png" style="width: 80px; height: 80px; object-fit: contain; background-color: white; border-radius: 50%; padding: 6px;" class="me-3" alt="Logo"/>DNS Recursivo</h4>
+      <h4><img src="/static/logo.png" style="width: 80px; height: 80px; object-fit: contain; background-color: white; border-radius: 50%; padding: 6px;" class="me-3" alt="Logo"/>DNS Elevate</h4>
       <div class="d-flex align-items-center gap-2">
         <button class="refresh-btn" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
         <span id="status-badge" class="badge-status badge-active"><span class="dot dot-green"></span> Unbound Ativo</span>
