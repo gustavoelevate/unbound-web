@@ -21,7 +21,7 @@ Interface web leve para monitoramento e gerenciamento do servidor DNS [Unbound](
 ### 1. Clone o repositório
 
 ```bash
-git clone https://github.com/SEU_USUARIO/unbound-web.git /opt/unbound-web
+git clone https://github.com/gustavoelevate/unbound-web.git /opt/unbound-web
 cd /opt/unbound-web
 ```
 
