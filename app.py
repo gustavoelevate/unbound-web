@@ -55,15 +55,25 @@ def collect():
             total     = int(d.get("total.num.queries", 0))
             cachehits = int(d.get("total.num.cachehits", 0))
             cachemiss = int(d.get("total.num.cachemiss", 0))
-            elapsed   = now - last_queries["ts"]
-            qps = max(0, (total - last_queries["total"]) / elapsed) if elapsed > 0 else 0
-            ch  = max(0, cachehits - last_queries["cachehits"])
-            cm  = max(0, cachemiss - last_queries["cachemiss"])
+            dnssec_ok_cum = int(d.get("num.answer.secure", d.get("total.num.dnssec_secure", 0)))
+            dnssec_bad_cum = int(d.get("num.answer.bogus", d.get("total.num.dnssec_bogus", 0)))
 
             # Tempo de resposta: média do último minuto
             resp_avg_s = float(d.get("total.recursion.time.avg", 0))
             resp_med_s = float(d.get("total.recursion.time.median", 0))
             sum_time_s = cachemiss * resp_avg_s
+
+            if last_queries["total"] == 0:
+                last_queries = {"total": total, "cachehits": cachehits, "cachemiss": cachemiss, "sum_time": sum_time_s, "dnssec_ok": dnssec_ok_cum, "dnssec_bad": dnssec_bad_cum, "ts": now}
+                time.sleep(60)
+                continue
+
+            elapsed   = now - last_queries["ts"]
+            qps = max(0, (total - last_queries["total"]) / elapsed) if elapsed > 0 else 0
+            ch  = max(0, cachehits - last_queries["cachehits"])
+            cm  = max(0, cachemiss - last_queries["cachemiss"])
+            dok = max(0, dnssec_ok_cum - last_queries.get("dnssec_ok", 0))
+            dbad = max(0, dnssec_bad_cum - last_queries.get("dnssec_bad", 0))
             
             old_sum = last_queries.get("sum_time", 0)
             d_sum = sum_time_s - old_sum
@@ -80,12 +90,12 @@ def collect():
             history["qps"].append(round(qps, 1))
             history["cachehits"].append(ch)
             history["cachemiss"].append(cm)
-            history["dnssec_ok"].append(int(d.get("total.num.dnssec_secure", 0)))
-            history["dnssec_bad"].append(int(d.get("total.num.dnssec_bogus", 0)))
+            history["dnssec_ok"].append(dok)
+            history["dnssec_bad"].append(dbad)
             history["resp_avg"].append(resp_avg_ms)
             history["resp_med"].append(resp_med_ms)
 
-            last_queries = {"total": total, "cachehits": cachehits, "cachemiss": cachemiss, "sum_time": sum_time_s, "ts": now}
+            last_queries = {"total": total, "cachehits": cachehits, "cachemiss": cachemiss, "sum_time": sum_time_s, "dnssec_ok": dnssec_ok_cum, "dnssec_bad": dnssec_bad_cum, "ts": now}
         except Exception as e:
             print(f"Collector error: {e}")
         time.sleep(60)
@@ -166,8 +176,8 @@ def stats():
             "expired": int(d.get("total.num.expired", 0)),
             "rrsets": int(d.get("msg.cache.count", 0)),
             "messages": int(d.get("rrset.cache.count", 0)),
-            "dnssec_ok": int(d.get("total.num.dnssec_secure", 0)),
-            "dnssec_bad": int(d.get("total.num.dnssec_bogus", 0)),
+            "dnssec_ok": int(d.get("num.answer.secure", d.get("total.num.dnssec_secure", 0))),
+            "dnssec_bad": int(d.get("num.answer.bogus", d.get("total.num.dnssec_bogus", 0))),
             "unwanted_replies": int(d.get("unwanted.replies", 0)),
             "unwanted_queries": int(d.get("unwanted.queries", 0)),
             "qtypes": qtypes,
