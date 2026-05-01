@@ -488,7 +488,7 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 <body>
 <div class="sidebar">
   <div class="brand" onclick="showPage('dashboard', document.querySelectorAll('.nav-item')[0])" style="justify-content:center; padding:32px 16px 24px 16px;">
-    <img src="/static/logo.png" alt="Elevate Network" style="width:75%; max-height:none; object-fit:contain;"/>
+    <img src="/static/logo.png" alt="Elevate Network" style="width:55%; max-height:none; object-fit:contain; border-radius:8px; box-shadow:0 4px 12px rgba(40,35,98,.15);"/>
   </div>
   <div style="padding:16px 0">
     <div class="nav-item active" onclick="showPage('dashboard',this)"><i class="bi bi-speedometer2"></i> Dashboard</div>
