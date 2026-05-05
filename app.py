@@ -297,6 +297,49 @@ def debug_stats():
     d = parse_stats()
     return jsonify(d)
 
+@app.route("/api/stats/advanced")
+def stats_advanced():
+    try:
+        lines = 50000
+        proc = subprocess.Popen(["tail", "-n", str(lines), LOG_FILE], stdout=subprocess.PIPE, text=True)
+        out, _ = proc.communicate()
+        
+        top_domains = {}
+        top_servfail = {}
+        top_ips = {}
+        
+        for line in out.splitlines():
+            if " IN " in line:
+                parts = line.split()
+                try:
+                    in_idx = parts.index("IN")
+                    domain = parts[in_idx - 2].rstrip('.')
+                    ip = parts[in_idx - 3]
+                    
+                    if ip == "reply:":
+                        ip = parts[in_idx - 4]
+                        
+                    if ":" in ip or "." in ip:
+                        top_ips[ip] = top_ips.get(ip, 0) + 1
+                        
+                        if " SERVFAIL " in line:
+                            top_servfail[domain] = top_servfail.get(domain, 0) + 1
+                        else:
+                            top_domains[domain] = top_domains.get(domain, 0) + 1
+                except Exception:
+                    pass
+                    
+        def get_top(d, n=10):
+            return [{"name": k, "count": v} for k, v in sorted(d.items(), key=lambda item: item[1], reverse=True)[:n]]
+            
+        return jsonify({
+            "top_domains": get_top(top_domains),
+            "top_servfail": get_top(top_servfail),
+            "top_ips": get_top(top_ips)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Blocklist
 def read_blocklist():
     domains = []
@@ -540,6 +583,7 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
   <div style="padding:16px 0">
     <div class="nav-item active" onclick="showPage('dashboard',this)"><i class="bi bi-speedometer2"></i> Dashboard</div>
     <div class="nav-item" onclick="showPage('blocklist',this)"><i class="bi bi-slash-circle"></i> Bloqueios</div>
+    <div class="nav-item" onclick="showPage('advanced',this)"><i class="bi bi-bar-chart-steps"></i> Avançado</div>
     <div class="nav-item" onclick="showPage('logs',this)"><i class="bi bi-terminal"></i> Logs</div>
   </div>
 </div>
@@ -688,6 +732,37 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
     <div class="chart-card"><input type="text" id="search-domain" placeholder="Filtrar domínios..." oninput="renderDomains()"/><div id="domain-list" class="mt-3"></div></div>
   </div>
 
+  <!-- ADVANCED STATS -->
+  <div id="page-advanced" class="page">
+    <div class="topbar">
+      <h4><i class="bi bi-bar-chart-steps me-2 text-primary"></i>Estatísticas Avançadas (Top 10)</h4>
+      <button class="refresh-btn text-primary" onclick="loadAdvancedStats()">
+        <i class="bi bi-arrow-clockwise"></i> Atualizar
+      </button>
+    </div>
+    
+    <div class="row g-3 mb-4">
+      <div class="col-md-4">
+        <div class="chart-card">
+          <div class="chart-title"><i class="bi bi-globe me-2 text-success"></i>Top Domínios Resolvidos</div>
+          <div id="list-top-domains" class="mt-3"></div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="chart-card">
+          <div class="chart-title"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Top SERVFAIL</div>
+          <div id="list-top-servfail" class="mt-3"></div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="chart-card">
+          <div class="chart-title"><i class="bi bi-pc-display me-2 text-info"></i>Top IPs Clientes</div>
+          <div id="list-top-ips" class="mt-3"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- LOGS -->
   <div id="page-logs" class="page">
     <div class="topbar"><h4><i class="bi bi-terminal me-2"></i>Logs em Tempo Real <span class="live-dot ms-1"></span></h4><div class="d-flex gap-2"><button class="refresh-btn" onclick="clearLogs()"><i class="bi bi-trash"></i> Limpar</button><button class="refresh-btn" id="btn-pause" onclick="togglePause()"><i class="bi bi-pause-fill"></i> Pausar</button></div></div>
@@ -721,6 +796,7 @@ function showPage(name,el){
   el.classList.add('active');
   if(name==='dashboard')loadAll();
   if(name==='blocklist')loadBlocklist();
+  if(name==='advanced')loadAdvancedStats();
   if(name==='logs')startLogs();
 }
 function showToast(msg,ok=true){
@@ -1049,6 +1125,54 @@ async function syncBotnet(){
   }catch(e){showToast('Erro na requisição: '+e,false);}
   btn.innerHTML=icon;
   btn.disabled=false;
+}
+
+// Advanced Stats
+async function loadAdvancedStats(){
+  const lists = ['domains', 'servfail', 'ips'];
+  lists.forEach(l => {
+    document.getElementById('list-top-'+l).innerHTML = '<p style="color:var(--muted);text-align:center;padding:16px"><i class="bi bi-arrow-repeat spin"></i> Carregando...</p>';
+  });
+  
+  try {
+    const r = await fetch('/api/stats/advanced');
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || 'Erro desconhecido');
+    
+    function renderList(targetId, data) {
+      const list = document.getElementById(targetId);
+      if(!data || !data.length){
+        list.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;text-align:center;">Nenhum dado encontrado nos logs recentes.</p>';
+        return;
+      }
+      let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+      const maxCount = data[0].count;
+      data.forEach((item, idx) => {
+        const pct = Math.max(5, Math.round((item.count / maxCount) * 100));
+        html += `
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--text);">
+              <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;" title="${item.name}">${idx+1}. ${item.name}</span>
+              <span style="color:var(--muted);">${fmt(item.count)}</span>
+            </div>
+            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+              <div style="width:${pct}%;height:100%;background:var(--primary);border-radius:3px;"></div>
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+      list.innerHTML = html;
+    }
+    
+    renderList('list-top-domains', d.top_domains);
+    renderList('list-top-servfail', d.top_servfail);
+    renderList('list-top-ips', d.top_ips);
+  } catch(e) {
+    lists.forEach(l => {
+      document.getElementById('list-top-'+l).innerHTML = '<p style="color:var(--danger);text-align:center;font-size:0.85rem;">Erro ao carregar dados.<br><small style="color:var(--muted);">Verifique se "log-queries: yes" está ativo no unbound.conf.</small></p>';
+    });
+  }
 }
 
 // Logs
