@@ -659,9 +659,13 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
   .topbar { flex-direction: column; align-items: center; gap: 12px; }
   .topbar > div, .topbar .d-flex { flex-wrap: wrap; justify-content: center !important; width: 100%; }
   .topbar img { margin-bottom: 8px; }
+  .topbar-mobile-logo { display: block !important; margin-bottom: 8px !important; }
   #log-ip-filter { width: 100% !important; margin-bottom: 8px; }
-  .metric-card .value { font-size: clamp(1.2rem, 5vw, 1.65rem); }
-  div[style*="font-size:1.8rem"] { font-size: clamp(1.4rem, 6vw, 1.8rem) !important; }
+  .metric-card { padding: 12px 14px !important; }
+  .metric-card .value { font-size: clamp(1.1rem, 7vw, 1.4rem); }
+  div[style*="font-size:1.8rem"] { font-size: clamp(1.2rem, 7vw, 1.5rem) !important; }
+  .chart-card .d-flex.justify-content-between { flex-direction: column; align-items: flex-start !important; gap: 10px; }
+  .period-group { flex-wrap: wrap; justify-content: flex-start; }
 }
 </style>
 </head>
@@ -682,7 +686,10 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
   <!-- DASHBOARD -->
   <div id="page-dashboard" class="page active">
     <div class="topbar" style="justify-content: space-between;">
-      <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <img src="/static/logo.png" alt="Elevate Network" class="topbar-mobile-logo" style="display: none; max-height: 40px; object-fit: contain; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"/>
+        <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
+      </div>
       <div class="d-flex align-items-center gap-2">
         <button class="refresh-btn text-warning" onclick="updateApp()" title="Atualizar aplicação do Github" style="border-color:var(--warning)"><i class="bi bi-cloud-arrow-down-fill"></i> Atualizar App</button>
         <button class="refresh-btn" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Atualizar Dados</button>
@@ -811,7 +818,10 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
   <!-- BLOCKLIST -->
   <div id="page-blocklist" class="page">
     <div class="topbar" style="justify-content: space-between;">
-      <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <img src="/static/logo.png" alt="Elevate Network" class="topbar-mobile-logo" style="display: none; max-height: 40px; object-fit: contain; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"/>
+        <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
+      </div>
       <div class="d-flex align-items-center gap-3">
         <button class="refresh-btn text-danger" onclick="clearAllBlocks()" title="Remover todos os bloqueios e limpar lista" style="border-color:var(--danger)">
           <i class="bi bi-trash"></i> Limpar Tudo
@@ -831,7 +841,10 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
   <!-- ADVANCED STATS -->
   <div id="page-advanced" class="page">
     <div class="topbar" style="justify-content: space-between;">
-      <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <img src="/static/logo.png" alt="Elevate Network" class="topbar-mobile-logo" style="display: none; max-height: 40px; object-fit: contain; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"/>
+        <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
+      </div>
       <div class="d-flex align-items-center gap-3">
         <div class="period-group">
           <span style="font-size:.72rem;color:var(--muted);margin-right:4px">Período fixo: Últimas 12h</span>
@@ -868,7 +881,8 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
   <!-- LOGS -->
   <div id="page-logs" class="page">
     <div class="topbar" style="display: flex; align-items: center; width: 100%;">
-      <div style="flex: 1; display: flex;">
+      <div style="flex: 1; display: flex; align-items: center; gap: 15px;">
+        <img src="/static/logo.png" alt="Elevate Network" class="topbar-mobile-logo" style="display: none; max-height: 40px; object-fit: contain; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"/>
         <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
       </div>
       <div class="d-flex align-items-center gap-2" style="flex: 1; justify-content: center;">
