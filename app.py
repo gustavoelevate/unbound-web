@@ -337,7 +337,12 @@ def apply_blocklist(domains, previous):
 
 @app.route("/api/blocklist", methods=["GET"])
 def blocklist_get():
-    return jsonify({"domains": read_blocklist()})
+    domains = read_blocklist()
+    q = request.args.get("q", "").lower()
+    if q:
+        filtered = [d for d in domains if q in d][:100]
+        return jsonify({"domains": filtered, "total": len(domains)})
+    return jsonify({"domains": [], "total": len(domains)})
 
 @app.route("/api/blocklist", methods=["POST"])
 def blocklist_add():
@@ -971,25 +976,46 @@ async function loadHistory(){
 async function loadBlockedCount(){
   const r=await fetch('/api/blocklist');
   const d=await r.json();
-  document.getElementById('m-blocked').textContent=fmt(d.domains.length);
+  document.getElementById('m-blocked').textContent=fmt(d.total);
 }
 
 function loadAll(){loadStats();loadHistory();loadBlockedCount();}
 
 // Blocklist
-let allDomains=[];
 async function loadBlocklist(){
   const r=await fetch('/api/blocklist');const d=await r.json();
-  allDomains=d.domains;
-  document.getElementById('block-count').textContent=allDomains.length+' domínios';
+  document.getElementById('block-count').textContent=fmt(d.total)+' domínios';
   renderDomains();
 }
+let searchTimeout;
 function renderDomains(){
-  const q=document.getElementById('search-domain').value.toLowerCase();
+  const q=document.getElementById('search-domain').value.toLowerCase().trim();
   const list=document.getElementById('domain-list');
-  const f=allDomains.filter(d=>d.includes(q));
-  if(!f.length){list.innerHTML='<p style="color:var(--muted);text-align:center;padding:16px">Nenhum domínio encontrado.</p>';return;}
-  list.innerHTML=f.map(d=>`<span class="domain-tag"><i class="bi bi-slash-circle" style="color:var(--danger)"></i>${d}<span class="del" onclick="deleteDomain('${d}')"><i class="bi bi-x-lg"></i></span></span>`).join('');
+  
+  if(!q || q.length < 3){
+    list.innerHTML='<p style="color:var(--muted);text-align:center;padding:16px">Digite ao menos 3 caracteres para buscar um domínio.</p>';
+    return;
+  }
+  
+  list.innerHTML='<p style="color:var(--muted);text-align:center;padding:16px"><i class="bi bi-arrow-repeat spin"></i> Buscando...</p>';
+  
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(async () => {
+    try {
+      const r = await fetch('/api/blocklist?q=' + encodeURIComponent(q));
+      const d = await r.json();
+      if(!d.domains.length){
+        list.innerHTML='<p style="color:var(--muted);text-align:center;padding:16px">Nenhum domínio encontrado.</p>';
+        return;
+      }
+      list.innerHTML=d.domains.map(dom=>`<span class="domain-tag"><i class="bi bi-slash-circle" style="color:var(--danger)"></i>${dom}<span class="del" onclick="deleteDomain('${dom}')"><i class="bi bi-x-lg"></i></span></span>`).join('');
+      if(d.domains.length === 100){
+        list.innerHTML += '<p style="color:var(--muted);text-align:center;padding:16px;font-size:0.8rem;">Exibindo os primeiros 100 resultados. Refine sua busca.</p>';
+      }
+    } catch(e) {
+      list.innerHTML='<p style="color:var(--danger);text-align:center;padding:16px">Erro na busca.</p>';
+    }
+  }, 300);
 }
 async function addDomain(){
   const input=document.getElementById('new-domain');
