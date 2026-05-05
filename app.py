@@ -307,7 +307,7 @@ def stats_advanced():
         qps = queries / uptime if uptime > 0 else 50
         
         lines_to_read = int(qps * 3 * 3600 * hours)
-        lines_to_read = min(lines_to_read, 1500000)
+        lines_to_read = min(lines_to_read, 400000)
         lines_to_read = max(lines_to_read, 50000)
         
         proc = subprocess.Popen(["tail", "-n", str(lines_to_read), LOG_FILE], stdout=subprocess.PIPE, text=True)
@@ -318,82 +318,37 @@ def stats_advanced():
         top_ips = {}
         
         import re
-        from datetime import datetime, timedelta
-        
-        now = datetime.now()
-        limit_dt = now - timedelta(hours=hours)
-        year_str = f"{now.year} "
-        
-        pattern_syslog = re.compile(r'^([A-Z][a-z]{2}\s+\d+\s+\d+:\d+:\d+)')
-        pattern_epoch = re.compile(r'^\[(\d+)\]')
-        pattern_iso = re.compile(r'^(\d{4}-\d{2}-\d{2}\s+\d+:\d+:\d+)')
-        
-        cache_time = {}
+        re_domain = re.compile(r'([a-zA-Z0-9_\.-]+)\.\s+[A-Z]+\s+IN')
+        re_ip = re.compile(r'(?:info:|reply:|query:)\s+([a-fA-F0-9\.:]+)')
+        re_ip_fallback = re.compile(r'(?:reply:|servfail|warning:|error:)\s+([a-fA-F0-9\.:]+)')
         
         for line in out.splitlines():
-            # Filtro de tempo
-            dt = None
-            m = pattern_syslog.match(line)
-            if m:
-                ts_str = m.group(1)
-                if ts_str not in cache_time:
-                    try:
-                        d_tmp = datetime.strptime(year_str + ts_str, "%Y %b %d %H:%M:%S")
-                        if d_tmp > now: d_tmp = d_tmp.replace(year=now.year - 1)
-                        cache_time[ts_str] = d_tmp
-                    except:
-                        pass
-                dt = cache_time.get(ts_str)
-            else:
-                m2 = pattern_epoch.match(line)
-                if m2:
-                    ts_str = m2.group(1)
-                    if ts_str not in cache_time:
-                        cache_time[ts_str] = datetime.fromtimestamp(int(ts_str))
-                    dt = cache_time.get(ts_str)
-                else:
-                    m3 = pattern_iso.match(line)
-                    if m3:
-                        ts_str = m3.group(1)
-                        if ts_str not in cache_time:
-                            try:
-                                cache_time[ts_str] = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-                            except:
-                                pass
-                        dt = cache_time.get(ts_str)
+            # Extrair dominio
+            m_domain = re_domain.search(line)
+            if not m_domain: continue
             
-            if dt and dt < limit_dt:
-                continue
-                
-            # Extrair dominio (suporta <domain.com. A IN> e domain.com. A IN)
-            m_domain = re.search(r'([a-zA-Z0-9_\.-]+)\.\s+[A-Z]+\s+IN', line)
-            if not m_domain:
-                continue
             domain = m_domain.group(1).lower()
-            if domain.startswith('<'):
-                domain = domain[1:]
+            if domain.startswith('<'): domain = domain[1:]
 
-            # Extrair IP (suporta info: IP, reply: IP, etc)
+            # Extrair IP
             ip = None
-            m_ip = re.search(r'(?:info:|reply:|query:)\s+([a-fA-F0-9\.:]+)', line)
+            m_ip = re_ip.search(line)
             if m_ip:
                 ip = m_ip.group(1)
                 if ip in ("reply:", "servfail", "warning:", "error:"):
-                    m2 = re.search(r'(?:reply:|servfail|warning:|error:)\s+([a-fA-F0-9\.:]+)', line)
-                    if m2:
-                        ip = m2.group(1)
+                    m2 = re_ip_fallback.search(line)
+                    if m2: ip = m2.group(1)
             
-            # Limpa lixos
             if ip and (ip.startswith('<') or ip.lower() in ("servfail", "warning:", "error:", "reply:")):
                 ip = None
                 
             if ip:
                 top_ips[ip] = top_ips.get(ip, 0) + 1
                 
-            # Incrementa contadores
-            if "servfail" in line.lower() or " servfail " in line:
+            line_lower = line.lower()
+            if "servfail" in line_lower:
                 top_servfail[domain] = top_servfail.get(domain, 0) + 1
-            elif "reply:" not in line.lower() and "servfail" not in line.lower():
+            elif "reply:" not in line_lower:
                 top_domains[domain] = top_domains.get(domain, 0) + 1
                     
         def get_top(d, n=10):
