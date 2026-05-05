@@ -297,17 +297,26 @@ def debug_stats():
     d = parse_stats()
     return jsonify(d)
 
+advanced_stats_cache = {"ts": 0, "data": None}
+
 @app.route("/api/stats/advanced")
 def stats_advanced():
+    global advanced_stats_cache
+    import time
+    
+    # Retorna do cache se tiver sido processado a menos de 10 minutos (600 segundos)
+    if advanced_stats_cache["data"] and (time.time() - advanced_stats_cache["ts"]) < 600:
+        return jsonify(advanced_stats_cache["data"])
+        
     try:
-        hours = float(request.args.get("hours", 1.0))
         d_stats = parse_stats()
         queries = float(d_stats.get("total.num.queries", 0))
         uptime = float(d_stats.get("time.up", 1))
         qps = queries / uptime if uptime > 0 else 50
         
-        lines_to_read = int(qps * 3 * 3600 * hours)
-        lines_to_read = min(lines_to_read, 400000)
+        # 12 horas estático
+        lines_to_read = int(qps * 3 * 3600 * 12)
+        lines_to_read = min(lines_to_read, 300000) # limite reduzido para uso levíssimo de CPU
         lines_to_read = max(lines_to_read, 50000)
         
         proc = subprocess.Popen(["tail", "-n", str(lines_to_read), LOG_FILE], stdout=subprocess.PIPE, text=True)
@@ -354,11 +363,16 @@ def stats_advanced():
         def get_top(d, n=10):
             return [{"name": k, "count": v} for k, v in sorted(d.items(), key=lambda item: item[1], reverse=True)[:n]]
             
-        return jsonify({
+        res = {
             "top_domains": get_top(top_domains),
             "top_servfail": get_top(top_servfail),
             "top_ips": get_top(top_ips)
-        })
+        }
+        
+        advanced_stats_cache["data"] = res
+        advanced_stats_cache["ts"] = time.time()
+        
+        return jsonify(res)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -767,12 +781,7 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
       <h4><i class="bi bi-bar-chart-steps me-2 text-primary"></i>Estatísticas Avançadas (Top 10)</h4>
       <div class="d-flex align-items-center gap-3">
         <div class="period-group">
-          <span style="font-size:.72rem;color:var(--muted);margin-right:4px">Período:</span>
-          <button class="period-btn active" onclick="setAdvPeriod(1,this)">1h</button>
-          <button class="period-btn" onclick="setAdvPeriod(3,this)">3h</button>
-          <button class="period-btn" onclick="setAdvPeriod(6,this)">6h</button>
-          <button class="period-btn" onclick="setAdvPeriod(12,this)">12h</button>
-          <button class="period-btn" onclick="setAdvPeriod(24,this)">24h</button>
+          <span style="font-size:.72rem;color:var(--muted);margin-right:4px">Período fixo: Últimas 12h</span>
         </div>
         <button class="refresh-btn text-primary" onclick="loadAdvancedStats()">
           <i class="bi bi-arrow-clockwise"></i> Atualizar
@@ -1179,14 +1188,6 @@ async function syncBotnet(){
 }
 
 // Advanced Stats
-let advPeriod = 1;
-function setAdvPeriod(h, el) {
-  advPeriod = h;
-  el.parentNode.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
-  loadAdvancedStats();
-}
-
 async function loadAdvancedStats(){
   const lists = ['domains', 'servfail', 'ips'];
   lists.forEach(l => {
@@ -1194,7 +1195,7 @@ async function loadAdvancedStats(){
   });
   
   try {
-    const r = await fetch('/api/stats/advanced?hours=' + advPeriod);
+    const r = await fetch('/api/stats/advanced');
     const d = await r.json();
     if(!r.ok) throw new Error(d.error || 'Erro desconhecido');
     
