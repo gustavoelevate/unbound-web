@@ -1296,7 +1296,17 @@ function startLogs(){
     box.scrollTop=box.scrollHeight;
   };
 }
-function clearLogs(){document.getElementById('log-box').innerHTML='';}
+function clearLogs(){
+  if(logSource){ logSource.close(); logSource=null; }
+  document.getElementById('log-live-dot').style.display='none';
+  document.getElementById('log-ip-filter').value = '';
+  document.getElementById('log-box').innerHTML = `
+    <div id="log-msg-default" style="color:var(--muted);text-align:center;padding:40px;font-size:0.9rem;">
+      <i class="bi bi-funnel" style="font-size:2rem;display:block;margin-bottom:10px;"></i>
+      Digite um endereço de IP acima e clique em Filtrar para iniciar o monitoramento ao vivo.
+    </div>
+  `;
+}
 function togglePause(){
   logPaused=!logPaused;
   document.getElementById('btn-pause').innerHTML=logPaused?'<i class="bi bi-play-fill"></i> Retomar':'<i class="bi bi-pause-fill"></i> Pausar';
