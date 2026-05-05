@@ -851,11 +851,15 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 
   <!-- LOGS -->
   <div id="page-logs" class="page">
-    <div class="topbar" style="justify-content: space-between;">
-      <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
-      <div class="d-flex align-items-center gap-2">
-        <input type="text" id="log-ip-filter" class="form-control form-control-sm" placeholder="Digite um IP..." style="width: 150px; border-color:var(--border); background:var(--card); color:var(--text)" onkeydown="if(event.key==='Enter')startLogs()"/>
+    <div class="topbar" style="display: flex; align-items: center; width: 100%;">
+      <div style="flex: 1; display: flex;">
+        <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
+      </div>
+      <div class="d-flex align-items-center gap-2" style="flex: 1; justify-content: center;">
+        <input type="text" id="log-ip-filter" class="form-control form-control-sm" placeholder="Digite um IP para filtrar..." style="width: 220px; border-color:var(--border); background:var(--card); color:var(--text); text-align: center;" onkeydown="if(event.key==='Enter')startLogs()"/>
         <button class="refresh-btn text-primary" onclick="startLogs()"><i class="bi bi-funnel"></i> Filtrar</button>
+      </div>
+      <div class="d-flex align-items-center gap-2" style="flex: 1; justify-content: flex-end;">
         <button class="refresh-btn" onclick="clearLogs()"><i class="bi bi-trash"></i> Limpar</button>
         <button class="refresh-btn" id="btn-pause" onclick="togglePause()"><i class="bi bi-pause-fill"></i> Pausar</button>
       </div>
