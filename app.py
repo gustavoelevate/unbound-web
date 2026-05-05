@@ -367,6 +367,43 @@ def blocklist_delete(domain):
         return jsonify({"error": f"Falha ao remover bloqueio: {e}"}), 500
     return jsonify({"ok": True})
 
+@app.route("/api/blocklist/sync_botnet", methods=["POST"])
+def blocklist_sync_botnet():
+    sources = [
+        "https://osint.digitalside.it/Threat-Intel/lists/latestdomains.txt",
+        "https://urlhaus.abuse.ch/downloads/hostfile/"
+    ]
+    try:
+        import urllib.request
+        new_domains = set()
+        for url in sources:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=30) as response:
+                data = response.read().decode('utf-8', errors='ignore')
+            for line in data.splitlines():
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                parts = line.split()
+                if len(parts) >= 2 and parts[0] in ('127.0.0.1', '0.0.0.0'):
+                    domain = parts[1]
+                else:
+                    domain = parts[0]
+                domain = sanitize_domain(domain)
+                if domain and domain != 'localhost':
+                    new_domains.add(domain)
+                    
+        previous = read_blocklist()
+        domains = set(previous)
+        initial_count = len(domains)
+        domains.update(new_domains)
+        
+        apply_blocklist(list(domains), previous)
+        
+        return jsonify({"ok": True, "added": len(domains) - initial_count, "total": len(domains)})
+    except Exception as e:
+        return jsonify({"error": f"Falha na sincronizacao: {e}"}), 500
+
 # Logs SSE
 @app.route("/api/logs/stream")
 def logs_stream():
@@ -480,6 +517,8 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 #log-box .line:hover{color:#e2d9f5;}
 .live-dot{width:7px;height:7px;background:var(--success);border-radius:50%;display:inline-block;animation:pulse 1.5s infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes spin{100%{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite;display:inline-block;}
 .toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;}
 .period-group{display:flex;gap:4px;align-items:center;}
 #theme-toggle{padding:6px 10px;}
@@ -628,7 +667,15 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 
   <!-- BLOCKLIST -->
   <div id="page-blocklist" class="page">
-    <div class="topbar"><h4><i class="bi bi-slash-circle me-2 text-danger"></i>Domínios Bloqueados</h4><span class="badge bg-secondary" id="block-count">0 domínios</span></div>
+    <div class="topbar">
+      <h4><i class="bi bi-slash-circle me-2 text-danger"></i>Domínios Bloqueados</h4>
+      <div class="d-flex align-items-center gap-3">
+        <button class="refresh-btn text-warning" onclick="syncBotnet()" id="btn-sync" title="Baixar lista atualizada de Botnets/C2C" style="border-color:var(--warning)">
+          <i class="bi bi-shield-lock-fill"></i> Sincronizar C2C/Botnet
+        </button>
+        <span class="badge bg-secondary" id="block-count">0 domínios</span>
+      </div>
+    </div>
     <div class="chart-card mb-3"><div class="d-flex gap-2"><input type="text" class="form-control" id="new-domain" placeholder="exemplo.com.br" onkeydown="if(event.key==='Enter')addDomain()"/><button class="btn btn-danger px-4" onclick="addDomain()"><i class="bi bi-plus-lg me-1"></i>Bloquear</button></div></div>
     <div class="chart-card"><input type="text" id="search-domain" placeholder="Filtrar domínios..." oninput="renderDomains()"/><div id="domain-list" class="mt-3"></div></div>
   </div>
@@ -959,6 +1006,20 @@ async function deleteDomain(domain){
   showToast('Desbloqueado: '+domain);
   loadBlocklist();
   loadBlockedCount();
+}
+async function syncBotnet(){
+  const btn=document.getElementById('btn-sync');
+  const icon=btn.innerHTML;
+  btn.innerHTML='<i class="bi bi-arrow-repeat spin"></i> Sincronizando...';
+  btn.disabled=true;
+  try{
+    const r=await fetch('/api/blocklist/sync_botnet',{method:'POST'});
+    const d=await r.json();
+    if(!r.ok) showToast(d.error||'Erro na sincronização',false);
+    else{ showToast(`Sincronizado! ${fmt(d.added)} novos de ${fmt(d.total)} total.`); loadBlocklist(); loadBlockedCount(); }
+  }catch(e){showToast('Erro na requisição: '+e,false);}
+  btn.innerHTML=icon;
+  btn.disabled=false;
 }
 
 // Logs
