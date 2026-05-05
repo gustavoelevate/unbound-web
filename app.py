@@ -414,14 +414,30 @@ def apply_blocklist(domains, previous):
         write_blocklist(previous)
         raise RuntimeError(reload.stderr.strip() or reload.stdout.strip() or "unbound-control reload falhou")
 
+SYNC_TIME_FILE = os.path.dirname(HISTORY_FILE) + "/botnet_sync.txt"
+
 @app.route("/api/blocklist", methods=["GET"])
 def blocklist_get():
     domains = read_blocklist()
+    last_sync = "Nunca"
+    if os.path.exists(SYNC_TIME_FILE):
+        with open(SYNC_TIME_FILE, "r") as f:
+            last_sync = f.read().strip()
+            
     q = request.args.get("q", "").lower()
     if q:
         filtered = [d for d in domains if q in d][:100]
-        return jsonify({"domains": filtered, "total": len(domains)})
-    return jsonify({"domains": [], "total": len(domains)})
+        return jsonify({"domains": filtered, "total": len(domains), "last_sync": last_sync})
+    return jsonify({"domains": [], "total": len(domains), "last_sync": last_sync})
+
+@app.route("/api/blocklist/clear_all", methods=["POST"])
+def blocklist_clear_all():
+    try:
+        previous = read_blocklist()
+        apply_blocklist([], previous)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": f"Falha ao remover bloqueios: {e}"}), 500
 
 @app.route("/api/blocklist", methods=["POST"])
 def blocklist_add():
@@ -486,6 +502,12 @@ def blocklist_sync_botnet():
         domains.update(new_domains)
         
         apply_blocklist(list(domains), previous)
+        
+        try:
+            with open(SYNC_TIME_FILE, "w") as f:
+                f.write(datetime.now().strftime("%d/%m/%Y %H:%M"))
+        except:
+            pass
         
         return jsonify({"ok": True, "added": len(domains) - initial_count, "total": len(domains)})
     except Exception as e:
@@ -765,8 +787,12 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
     <div class="topbar">
       <h4><i class="bi bi-slash-circle me-2 text-danger"></i>Domínios Bloqueados</h4>
       <div class="d-flex align-items-center gap-3">
-        <button class="refresh-btn text-warning" onclick="syncBotnet()" id="btn-sync" title="Baixar lista atualizada de Botnets/C2C" style="border-color:var(--warning)">
-          <i class="bi bi-shield-lock-fill"></i> Sincronizar C2C/Botnet
+        <button class="refresh-btn text-danger" onclick="clearAllBlocks()" title="Remover todos os bloqueios e limpar lista" style="border-color:var(--danger)">
+          <i class="bi bi-trash"></i> Limpar Tudo
+        </button>
+        <button class="refresh-btn text-warning d-flex flex-column align-items-center justify-content-center" onclick="syncBotnet()" id="btn-sync" title="Baixar lista atualizada de Botnets/C2C" style="border-color:var(--warning); padding: 4px 12px; line-height: 1.2;">
+          <div><i class="bi bi-shield-lock-fill"></i> Sincronizar C2C/Botnet</div>
+          <small id="sync-time" style="font-size: 0.65rem; opacity: 0.8;">Última: Carregando...</small>
         </button>
         <span class="badge bg-secondary" id="block-count">0 domínios</span>
       </div>
@@ -1121,6 +1147,7 @@ function loadAll(){loadStats();loadHistory();loadBlockedCount();}
 async function loadBlocklist(){
   const r=await fetch('/api/blocklist');const d=await r.json();
   document.getElementById('block-count').textContent=fmt(d.total)+' domínios';
+  document.getElementById('sync-time').textContent='Última: '+d.last_sync;
   renderDomains();
 }
 let searchTimeout;
@@ -1169,6 +1196,15 @@ async function deleteDomain(domain){
   const r=await fetch('/api/blocklist/'+encodeURIComponent(domain),{method:'DELETE'});
   if(!r.ok){showToast('Erro ao desbloquear',false);return;}
   showToast('Desbloqueado: '+domain);
+  loadBlocklist();
+  loadBlockedCount();
+}
+async function clearAllBlocks(){
+  if(!confirm('Atenção: Isso removerá TODOS os domínios bloqueados. Tem certeza?')) return;
+  const r=await fetch('/api/blocklist/clear_all',{method:'POST'});
+  if(!r.ok){showToast('Erro ao limpar a lista',false);return;}
+  showToast('Todos os bloqueios foram removidos com sucesso.');
+  document.getElementById('search-domain').value = '';
   loadBlocklist();
   loadBlockedCount();
 }
