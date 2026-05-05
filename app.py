@@ -635,6 +635,8 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 #search-domain:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
 #new-domain{font-family:inherit;}
 #new-domain:focus{border-color:var(--primary)!important;box-shadow:0 0 0 3px var(--primary-soft)!important;}
+#log-ip-filter{border:1px solid var(--primary)!important; border-radius:8px;}
+#log-ip-filter:focus{box-shadow:0 0 0 3px var(--primary-soft)!important; outline:none;}
 .btn-danger{background:var(--primary)!important;border-color:var(--primary)!important;}
 .btn-danger:hover{background:var(--primary-dark)!important;border-color:var(--primary-dark)!important;}
 #log-box{background:#0f0820;border:1px solid var(--border);border-radius:8px;height:500px;overflow-y:auto;padding:12px;font-family:'Menlo','Consolas',monospace;font-size:.75rem;color:#a89dc4;}
@@ -856,7 +858,7 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
         <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
       </div>
       <div class="d-flex align-items-center gap-2" style="flex: 1; justify-content: center;">
-        <input type="text" id="log-ip-filter" class="form-control form-control-sm" placeholder="Digite um IP para filtrar..." style="width: 220px; border-color:var(--border); background:var(--card); color:var(--text); text-align: center;" onkeydown="if(event.key==='Enter')startLogs()"/>
+        <input type="text" id="log-ip-filter" class="form-control form-control-sm" placeholder="Digite um IP para filtrar..." style="width: 220px; background:var(--card); color:var(--text); text-align: center;" onkeydown="if(event.key==='Enter')startLogs()"/>
         <button class="refresh-btn text-primary" onclick="startLogs()"><i class="bi bi-funnel"></i> Filtrar</button>
       </div>
       <div class="d-flex align-items-center gap-2" style="flex: 1; justify-content: flex-end;">
