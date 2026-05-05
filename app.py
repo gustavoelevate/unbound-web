@@ -439,6 +439,15 @@ def blocklist_clear_all():
     except Exception as e:
         return jsonify({"error": f"Falha ao remover bloqueios: {e}"}), 500
 
+@app.route("/api/system/update", methods=["POST"])
+def system_update():
+    try:
+        # Executa em background com delay para a resposta HTTP ser retornada antes do restart matar o flask
+        subprocess.Popen("sleep 2 && cd /opt/unbound-web && git pull origin main && systemctl restart unbound-web", shell=True)
+        return jsonify({"ok": True, "msg": "Atualização iniciada. A página será recarregada em breve."})
+    except Exception as e:
+        return jsonify({"error": f"Erro ao atualizar: {e}"}), 500
+
 @app.route("/api/blocklist", methods=["POST"])
 def blocklist_add():
     raw = request.json.get("domain", "")
@@ -659,7 +668,8 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
     <div class="topbar" style="justify-content: space-between;">
       <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
       <div class="d-flex align-items-center gap-2">
-        <button class="refresh-btn" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+        <button class="refresh-btn text-warning" onclick="updateApp()" title="Atualizar aplicação do Github" style="border-color:var(--warning)"><i class="bi bi-cloud-arrow-down-fill"></i> Atualizar App</button>
+        <button class="refresh-btn" onclick="loadAll()"><i class="bi bi-arrow-clockwise"></i> Atualizar Dados</button>
         <button id="theme-toggle" class="refresh-btn" onclick="toggleTheme()" title="Alternar Tema"><i class="bi bi-moon-fill" id="theme-icon"></i></button>
         <span id="status-badge" class="badge-status badge-active"><span class="dot dot-green"></span> Unbound Ativo</span>
       </div>
@@ -1199,6 +1209,21 @@ async function deleteDomain(domain){
   loadBlocklist();
   loadBlockedCount();
 }
+async function updateApp(){
+  if(!confirm('Deseja baixar a versão mais recente do Github e reiniciar o painel agora?')) return;
+  showToast('Iniciando atualização, aguarde recarregamento...', true);
+  try {
+    const r=await fetch('/api/system/update',{method:'POST'});
+    const d=await r.json();
+    if(!r.ok){ showToast(d.error||'Erro ao atualizar',false); }
+    else {
+      setTimeout(() => window.location.reload(), 3000);
+    }
+  }catch(e){
+    setTimeout(() => window.location.reload(), 3000);
+  }
+}
+
 async function clearAllBlocks(){
   if(!confirm('Atenção: Isso removerá TODOS os domínios bloqueados. Tem certeza?')) return;
   const r=await fetch('/api/blocklist/clear_all',{method:'POST'});
