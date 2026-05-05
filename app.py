@@ -794,8 +794,8 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 
   <!-- BLOCKLIST -->
   <div id="page-blocklist" class="page">
-    <div class="topbar">
-      <h4><i class="bi bi-slash-circle me-2 text-danger"></i>Domínios Bloqueados</h4>
+    <div class="topbar" style="justify-content: space-between;">
+      <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
       <div class="d-flex align-items-center gap-3">
         <button class="refresh-btn text-danger" onclick="clearAllBlocks()" title="Remover todos os bloqueios e limpar lista" style="border-color:var(--danger)">
           <i class="bi bi-trash"></i> Limpar Tudo
@@ -807,14 +807,15 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
         <span class="badge bg-secondary" id="block-count">0 domínios</span>
       </div>
     </div>
+    <div class="section-title"><i class="bi bi-slash-circle text-primary"></i> Domínios Bloqueados</div>
     <div class="chart-card mb-3"><div class="d-flex gap-2"><input type="text" class="form-control" id="new-domain" placeholder="exemplo.com.br" onkeydown="if(event.key==='Enter')addDomain()"/><button class="btn btn-danger px-4" onclick="addDomain()"><i class="bi bi-plus-lg me-1"></i>Bloquear</button></div></div>
     <div class="chart-card"><input type="text" id="search-domain" placeholder="Filtrar domínios..." oninput="renderDomains()"/><div id="domain-list" class="mt-3"></div></div>
   </div>
 
   <!-- ADVANCED STATS -->
   <div id="page-advanced" class="page">
-    <div class="topbar">
-      <h4><i class="bi bi-bar-chart-steps me-2 text-primary"></i>Estatísticas Avançadas (Top 10)</h4>
+    <div class="topbar" style="justify-content: space-between;">
+      <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
       <div class="d-flex align-items-center gap-3">
         <div class="period-group">
           <span style="font-size:.72rem;color:var(--muted);margin-right:4px">Período fixo: Últimas 12h</span>
@@ -824,23 +825,24 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
         </button>
       </div>
     </div>
+    <div class="section-title"><i class="bi bi-bar-chart-steps text-primary"></i> Estatísticas Avançadas (Top 10)</div>
     
     <div class="row g-3 mb-4">
       <div class="col-md-4">
         <div class="chart-card">
-          <div class="chart-title"><i class="bi bi-globe me-2 text-success"></i>Top Domínios Resolvidos</div>
+          <div class="chart-title"><i class="bi bi-globe me-2 text-primary"></i>Top Domínios Resolvidos</div>
           <div id="list-top-domains" class="mt-3"></div>
         </div>
       </div>
       <div class="col-md-4">
         <div class="chart-card">
-          <div class="chart-title"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Top SERVFAIL</div>
+          <div class="chart-title"><i class="bi bi-exclamation-triangle me-2 text-primary"></i>Top SERVFAIL</div>
           <div id="list-top-servfail" class="mt-3"></div>
         </div>
       </div>
       <div class="col-md-4">
         <div class="chart-card">
-          <div class="chart-title"><i class="bi bi-pc-display me-2 text-info"></i>Top IPs Clientes</div>
+          <div class="chart-title"><i class="bi bi-pc-display me-2 text-primary"></i>Top IPs Clientes</div>
           <div id="list-top-ips" class="mt-3"></div>
         </div>
       </div>
@@ -849,8 +851,8 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 
   <!-- LOGS -->
   <div id="page-logs" class="page">
-    <div class="topbar">
-      <h4><i class="bi bi-terminal me-2"></i>Logs em Tempo Real <span class="live-dot ms-1" style="display:none" id="log-live-dot"></span></h4>
+    <div class="topbar" style="justify-content: space-between;">
+      <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
       <div class="d-flex align-items-center gap-2">
         <input type="text" id="log-ip-filter" class="form-control form-control-sm" placeholder="Digite um IP..." style="width: 150px; border-color:var(--border); background:var(--card); color:var(--text)" onkeydown="if(event.key==='Enter')startLogs()"/>
         <button class="refresh-btn text-primary" onclick="startLogs()"><i class="bi bi-funnel"></i> Filtrar</button>
@@ -858,9 +860,10 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
         <button class="refresh-btn" id="btn-pause" onclick="togglePause()"><i class="bi bi-pause-fill"></i> Pausar</button>
       </div>
     </div>
+    <div class="section-title"><i class="bi bi-terminal text-primary"></i> Logs em Tempo Real <span class="live-dot ms-1" style="display:none" id="log-live-dot"></span></div>
     <div id="log-box">
       <div id="log-msg-default" style="color:var(--muted);text-align:center;padding:40px;font-size:0.9rem;">
-        <i class="bi bi-funnel" style="font-size:2rem;display:block;margin-bottom:10px;"></i>
+        <i class="bi bi-funnel text-primary" style="font-size:2rem;display:block;margin-bottom:10px;"></i>
         Digite um endereço de IP acima e clique em Filtrar para iniciar o monitoramento ao vivo.
       </div>
     </div>
