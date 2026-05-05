@@ -525,11 +525,18 @@ def blocklist_sync_botnet():
 # Logs SSE
 @app.route("/api/logs/stream")
 def logs_stream():
+    ip = request.args.get("ip", "").strip()
+    if not ip:
+        def empty():
+            yield "data: Por favor informe um IP para buscar logs.\n\n"
+        return Response(empty(), mimetype="text/event-stream")
+        
     def generate():
         try:
-            proc = subprocess.Popen(["tail", "-n", "100", "-f", LOG_FILE],
-                                    stdout=subprocess.PIPE, text=True)
-            for line in proc.stdout:
+            # Tailing more lines backward so when you connect you immediately see recent requests from that IP
+            tail = subprocess.Popen(["tail", "-n", "10000", "-f", LOG_FILE], stdout=subprocess.PIPE, text=True)
+            grep = subprocess.Popen(["grep", "--line-buffered", ip], stdin=tail.stdout, stdout=subprocess.PIPE, text=True)
+            for line in grep.stdout:
                 yield f"data: {line.rstrip()}\n\n"
         except Exception as e:
             yield f"data: ERRO: {e}\n\n"
@@ -842,8 +849,21 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 
   <!-- LOGS -->
   <div id="page-logs" class="page">
-    <div class="topbar"><h4><i class="bi bi-terminal me-2"></i>Logs em Tempo Real <span class="live-dot ms-1"></span></h4><div class="d-flex gap-2"><button class="refresh-btn" onclick="clearLogs()"><i class="bi bi-trash"></i> Limpar</button><button class="refresh-btn" id="btn-pause" onclick="togglePause()"><i class="bi bi-pause-fill"></i> Pausar</button></div></div>
-    <div id="log-box"></div>
+    <div class="topbar">
+      <h4><i class="bi bi-terminal me-2"></i>Logs em Tempo Real <span class="live-dot ms-1" style="display:none" id="log-live-dot"></span></h4>
+      <div class="d-flex align-items-center gap-2">
+        <input type="text" id="log-ip-filter" class="form-control form-control-sm" placeholder="Digite um IP..." style="width: 150px; border-color:var(--border); background:var(--card); color:var(--text)" onkeydown="if(event.key==='Enter')startLogs()"/>
+        <button class="refresh-btn text-primary" onclick="startLogs()"><i class="bi bi-funnel"></i> Filtrar</button>
+        <button class="refresh-btn" onclick="clearLogs()"><i class="bi bi-trash"></i> Limpar</button>
+        <button class="refresh-btn" id="btn-pause" onclick="togglePause()"><i class="bi bi-pause-fill"></i> Pausar</button>
+      </div>
+    </div>
+    <div id="log-box">
+      <div id="log-msg-default" style="color:var(--muted);text-align:center;padding:40px;font-size:0.9rem;">
+        <i class="bi bi-funnel" style="font-size:2rem;display:block;margin-bottom:10px;"></i>
+        Digite um endereço de IP acima e clique em Filtrar para iniciar o monitoramento ao vivo.
+      </div>
+    </div>
   </div>
 </div>
 
@@ -874,7 +894,6 @@ function showPage(name,el){
   if(name==='dashboard')loadAll();
   if(name==='blocklist')loadBlocklist();
   if(name==='advanced')loadAdvancedStats();
-  if(name==='logs')startLogs();
 }
 function showToast(msg,ok=true){
   const t=document.getElementById('toast');
@@ -1263,9 +1282,18 @@ async function loadAdvancedStats(){
 // Logs
 let logPaused=false,logSource=null;
 function startLogs(){
-  if(logSource)return;
+  const ip=document.getElementById('log-ip-filter').value.trim();
   const box=document.getElementById('log-box');
-  logSource=new EventSource('/api/logs/stream');
+  if(!ip){
+    showToast('Por favor, informe um IP de origem para visualizar os logs.', false);
+    return;
+  }
+  
+  if(logSource){ logSource.close(); logSource=null; }
+  
+  document.getElementById('log-live-dot').style.display='inline-block';
+  box.innerHTML='';
+  logSource=new EventSource('/api/logs/stream?ip=' + encodeURIComponent(ip));
   logSource.onmessage=(e)=>{
     if(logPaused)return;
     const div=document.createElement('div');
