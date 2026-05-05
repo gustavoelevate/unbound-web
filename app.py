@@ -300,8 +300,17 @@ def debug_stats():
 @app.route("/api/stats/advanced")
 def stats_advanced():
     try:
-        lines = 50000
-        proc = subprocess.Popen(["tail", "-n", str(lines), LOG_FILE], stdout=subprocess.PIPE, text=True)
+        hours = float(request.args.get("hours", 1.0))
+        d_stats = parse_stats()
+        queries = float(d_stats.get("total.num.queries", 0))
+        uptime = float(d_stats.get("time.up", 1))
+        qps = queries / uptime if uptime > 0 else 50
+        
+        lines_to_read = int(qps * 3 * 3600 * hours)
+        lines_to_read = min(lines_to_read, 1500000)
+        lines_to_read = max(lines_to_read, 50000)
+        
+        proc = subprocess.Popen(["tail", "-n", str(lines_to_read), LOG_FILE], stdout=subprocess.PIPE, text=True)
         out, _ = proc.communicate()
         
         top_domains = {}
@@ -309,7 +318,53 @@ def stats_advanced():
         top_ips = {}
         
         import re
+        from datetime import datetime, timedelta
+        
+        now = datetime.now()
+        limit_dt = now - timedelta(hours=hours)
+        year_str = f"{now.year} "
+        
+        pattern_syslog = re.compile(r'^([A-Z][a-z]{2}\s+\d+\s+\d+:\d+:\d+)')
+        pattern_epoch = re.compile(r'^\[(\d+)\]')
+        pattern_iso = re.compile(r'^(\d{4}-\d{2}-\d{2}\s+\d+:\d+:\d+)')
+        
+        cache_time = {}
+        
         for line in out.splitlines():
+            # Filtro de tempo
+            dt = None
+            m = pattern_syslog.match(line)
+            if m:
+                ts_str = m.group(1)
+                if ts_str not in cache_time:
+                    try:
+                        d_tmp = datetime.strptime(year_str + ts_str, "%Y %b %d %H:%M:%S")
+                        if d_tmp > now: d_tmp = d_tmp.replace(year=now.year - 1)
+                        cache_time[ts_str] = d_tmp
+                    except:
+                        pass
+                dt = cache_time.get(ts_str)
+            else:
+                m2 = pattern_epoch.match(line)
+                if m2:
+                    ts_str = m2.group(1)
+                    if ts_str not in cache_time:
+                        cache_time[ts_str] = datetime.fromtimestamp(int(ts_str))
+                    dt = cache_time.get(ts_str)
+                else:
+                    m3 = pattern_iso.match(line)
+                    if m3:
+                        ts_str = m3.group(1)
+                        if ts_str not in cache_time:
+                            try:
+                                cache_time[ts_str] = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                            except:
+                                pass
+                        dt = cache_time.get(ts_str)
+            
+            if dt and dt < limit_dt:
+                continue
+                
             # Extrair dominio (suporta <domain.com. A IN> e domain.com. A IN)
             m_domain = re.search(r'([a-zA-Z0-9_\.-]+)\.\s+[A-Z]+\s+IN', line)
             if not m_domain:
@@ -748,9 +803,19 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
   <div id="page-advanced" class="page">
     <div class="topbar">
       <h4><i class="bi bi-bar-chart-steps me-2 text-primary"></i>Estatísticas Avançadas (Top 10)</h4>
-      <button class="refresh-btn text-primary" onclick="loadAdvancedStats()">
-        <i class="bi bi-arrow-clockwise"></i> Atualizar
-      </button>
+      <div class="d-flex align-items-center gap-3">
+        <div class="period-group">
+          <span style="font-size:.72rem;color:var(--muted);margin-right:4px">Período:</span>
+          <button class="period-btn active" onclick="setAdvPeriod(1,this)">1h</button>
+          <button class="period-btn" onclick="setAdvPeriod(3,this)">3h</button>
+          <button class="period-btn" onclick="setAdvPeriod(6,this)">6h</button>
+          <button class="period-btn" onclick="setAdvPeriod(12,this)">12h</button>
+          <button class="period-btn" onclick="setAdvPeriod(24,this)">24h</button>
+        </div>
+        <button class="refresh-btn text-primary" onclick="loadAdvancedStats()">
+          <i class="bi bi-arrow-clockwise"></i> Atualizar
+        </button>
+      </div>
     </div>
     
     <div class="row g-3 mb-4">
@@ -1140,6 +1205,14 @@ async function syncBotnet(){
 }
 
 // Advanced Stats
+let advPeriod = 1;
+function setAdvPeriod(h, el) {
+  advPeriod = h;
+  el.parentNode.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  loadAdvancedStats();
+}
+
 async function loadAdvancedStats(){
   const lists = ['domains', 'servfail', 'ips'];
   lists.forEach(l => {
@@ -1147,7 +1220,7 @@ async function loadAdvancedStats(){
   });
   
   try {
-    const r = await fetch('/api/stats/advanced');
+    const r = await fetch('/api/stats/advanced?hours=' + advPeriod);
     const d = await r.json();
     if(!r.ok) throw new Error(d.error || 'Erro desconhecido');
     
