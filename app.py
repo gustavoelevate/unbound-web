@@ -308,26 +308,38 @@ def stats_advanced():
         top_servfail = {}
         top_ips = {}
         
+        import re
         for line in out.splitlines():
-            if " IN " in line:
-                parts = line.split()
-                try:
-                    in_idx = parts.index("IN")
-                    domain = parts[in_idx - 2].rstrip('.')
-                    ip = parts[in_idx - 3]
-                    
-                    if ip == "reply:":
-                        ip = parts[in_idx - 4]
-                        
-                    if ":" in ip or "." in ip:
-                        top_ips[ip] = top_ips.get(ip, 0) + 1
-                        
-                        if " SERVFAIL " in line:
-                            top_servfail[domain] = top_servfail.get(domain, 0) + 1
-                        else:
-                            top_domains[domain] = top_domains.get(domain, 0) + 1
-                except Exception:
-                    pass
+            # Extrair dominio (suporta <domain.com. A IN> e domain.com. A IN)
+            m_domain = re.search(r'([a-zA-Z0-9_\.-]+)\.\s+[A-Z]+\s+IN', line)
+            if not m_domain:
+                continue
+            domain = m_domain.group(1).lower()
+            if domain.startswith('<'):
+                domain = domain[1:]
+
+            # Extrair IP (suporta info: IP, reply: IP, etc)
+            ip = None
+            m_ip = re.search(r'(?:info:|reply:|query:)\s+([a-fA-F0-9\.:]+)', line)
+            if m_ip:
+                ip = m_ip.group(1)
+                if ip in ("reply:", "servfail", "warning:", "error:"):
+                    m2 = re.search(r'(?:reply:|servfail|warning:|error:)\s+([a-fA-F0-9\.:]+)', line)
+                    if m2:
+                        ip = m2.group(1)
+            
+            # Limpa lixos
+            if ip and (ip.startswith('<') or ip.lower() in ("servfail", "warning:", "error:", "reply:")):
+                ip = None
+                
+            if ip:
+                top_ips[ip] = top_ips.get(ip, 0) + 1
+                
+            # Incrementa contadores
+            if "servfail" in line.lower() or " servfail " in line:
+                top_servfail[domain] = top_servfail.get(domain, 0) + 1
+            elif "reply:" not in line.lower() and "servfail" not in line.lower():
+                top_domains[domain] = top_domains.get(domain, 0) + 1
                     
         def get_top(d, n=10):
             return [{"name": k, "count": v} for k, v in sorted(d.items(), key=lambda item: item[1], reverse=True)[:n]]
