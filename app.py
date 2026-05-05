@@ -614,7 +614,7 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 .metric-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;transition:background 0.3s, border-color 0.3s, transform 0.15s;}
 .metric-card:hover{border-color:var(--primary-light);}
 .metric-card .label{font-size:.75rem;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:5px;font-weight:500;}
-.metric-card .value{font-size:1.65rem;font-weight:700;color:var(--text);line-height:1;letter-spacing:-.01em;}
+.metric-card .value{font-size:1.65rem;font-weight:700;color:var(--text);line-height:1;letter-spacing:-.01em;word-break:break-word;overflow-wrap:anywhere;}
 .metric-card .sub{font-size:.72rem;margin-top:5px;}
 .sub-green{color:var(--success);}.sub-yellow{color:var(--warning);}.sub-blue{color:var(--primary);}
 .text-primary{color:var(--primary)!important;}
@@ -649,6 +649,20 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
 .toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;}
 .period-group{display:flex;gap:4px;align-items:center;}
 #theme-toggle{padding:6px 10px;}
+@media (max-width: 768px) {
+  .sidebar { width: 100%; height: 65px; min-height: auto; position: fixed; bottom: 0; left: 0; top: auto; border-right: none; border-top: 1px solid var(--border); display: flex; z-index: 1000; padding: 0 !important; }
+  .brand { display: none !important; }
+  .sidebar > div { display: flex; width: 100%; padding: 0 !important; justify-content: space-between; }
+  .nav-item { flex: 1; justify-content: center; padding: 8px 4px; font-size: 0.7rem; flex-direction: column; gap: 4px; border-left: none; border-top: 3px solid transparent; text-align: center; }
+  .nav-item.active { border-left-color: transparent; border-top-color: var(--primary); background: var(--nav-hover); }
+  .main { margin-left: 0; padding: 16px; padding-bottom: 85px; }
+  .topbar { flex-direction: column; align-items: center; gap: 12px; }
+  .topbar > div, .topbar .d-flex { flex-wrap: wrap; justify-content: center !important; width: 100%; }
+  .topbar img { margin-bottom: 8px; }
+  #log-ip-filter { width: 100% !important; margin-bottom: 8px; }
+  .metric-card .value { font-size: clamp(1.2rem, 5vw, 1.65rem); }
+  div[style*="font-size:1.8rem"] { font-size: clamp(1.4rem, 6vw, 1.8rem) !important; }
+}
 </style>
 </head>
 <body>
