@@ -370,28 +370,31 @@ def blocklist_delete(domain):
 @app.route("/api/blocklist/sync_botnet", methods=["POST"])
 def blocklist_sync_botnet():
     sources = [
-        "https://osint.digitalside.it/Threat-Intel/lists/latestdomains.txt",
+        "https://v.firebog.net/hosts/Prigent-Malware.txt",
         "https://urlhaus.abuse.ch/downloads/hostfile/"
     ]
     try:
         import urllib.request
         new_domains = set()
         for url in sources:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=30) as response:
-                data = response.read().decode('utf-8', errors='ignore')
-            for line in data.splitlines():
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                parts = line.split()
-                if len(parts) >= 2 and parts[0] in ('127.0.0.1', '0.0.0.0'):
-                    domain = parts[1]
-                else:
-                    domain = parts[0]
-                domain = sanitize_domain(domain)
-                if domain and domain != 'localhost':
-                    new_domains.add(domain)
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    data = response.read().decode('utf-8', errors='ignore')
+                for line in data.splitlines():
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    parts = line.split()
+                    if len(parts) >= 2 and parts[0] in ('127.0.0.1', '0.0.0.0'):
+                        domain = parts[1]
+                    else:
+                        domain = parts[0]
+                    domain = sanitize_domain(domain)
+                    if domain and domain != 'localhost':
+                        new_domains.add(domain)
+            except Exception as e:
+                print(f"Erro ao buscar {url}: {e}")
                     
         previous = read_blocklist()
         domains = set(previous)
