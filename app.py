@@ -316,11 +316,9 @@ def stats_advanced():
         
         # 12 horas estático
         lines_to_read = int(qps * 3 * 3600 * 12)
-        lines_to_read = min(lines_to_read, 300000) # limite reduzido para uso levíssimo de CPU
         lines_to_read = max(lines_to_read, 50000)
         
         proc = subprocess.Popen(["tail", "-n", str(lines_to_read), LOG_FILE], stdout=subprocess.PIPE, text=True)
-        out, _ = proc.communicate()
         
         top_domains = {}
         top_servfail = {}
@@ -331,7 +329,7 @@ def stats_advanced():
         re_ip = re.compile(r'(?:info:|reply:|query:)\s+([a-fA-F0-9\.:]+)')
         re_ip_fallback = re.compile(r'(?:reply:|servfail|warning:|error:)\s+([a-fA-F0-9\.:]+)')
         
-        for line in out.splitlines():
+        for line in proc.stdout:
             # Extrair dominio
             m_domain = re_domain.search(line)
             if not m_domain: continue
