@@ -320,7 +320,6 @@ def stats_advanced():
         
         proc = subprocess.Popen(["tail", "-n", str(lines_to_read), LOG_FILE], stdout=subprocess.PIPE, text=True)
         
-        top_domains = {}
         top_servfail = {}
         top_ips = {}
         
@@ -330,6 +329,10 @@ def stats_advanced():
         re_ip_fallback = re.compile(r'(?:reply:|servfail|warning:|error:)\s+([a-fA-F0-9\.:]+)')
         
         for line in proc.stdout:
+            line_lower = line.lower()
+            if "servfail" not in line_lower:
+                continue
+
             # Extrair dominio
             m_domain = re_domain.search(line)
             if not m_domain: continue
@@ -352,17 +355,12 @@ def stats_advanced():
             if ip:
                 top_ips[ip] = top_ips.get(ip, 0) + 1
                 
-            line_lower = line.lower()
-            if "servfail" in line_lower:
-                top_servfail[domain] = top_servfail.get(domain, 0) + 1
-            elif "reply:" not in line_lower:
-                top_domains[domain] = top_domains.get(domain, 0) + 1
+            top_servfail[domain] = top_servfail.get(domain, 0) + 1
                     
         def get_top(d, n=10):
             return [{"name": k, "count": v} for k, v in sorted(d.items(), key=lambda item: item[1], reverse=True)[:n]]
             
         res = {
-            "top_domains": get_top(top_domains),
             "top_servfail": get_top(top_servfail),
             "top_ips": get_top(top_ips)
         }
@@ -855,21 +853,15 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
     <div class="section-title"><i class="bi bi-bar-chart-steps text-primary"></i> Estatísticas Avançadas (Top 10)</div>
     
     <div class="row g-3 mb-4">
-      <div class="col-md-4">
+      <div class="col-md-6">
         <div class="chart-card">
-          <div class="chart-title"><i class="bi bi-globe me-2 text-primary"></i>Top Domínios Resolvidos</div>
-          <div id="list-top-domains" class="mt-3"></div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="chart-card">
-          <div class="chart-title"><i class="bi bi-exclamation-triangle me-2 text-primary"></i>Top SERVFAIL</div>
+          <div class="chart-title"><i class="bi bi-exclamation-triangle me-2 text-primary"></i>Top Domínios com SERVFAIL</div>
           <div id="list-top-servfail" class="mt-3"></div>
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-6">
         <div class="chart-card">
-          <div class="chart-title"><i class="bi bi-pc-display me-2 text-primary"></i>Top IPs Clientes</div>
+          <div class="chart-title"><i class="bi bi-pc-display me-2 text-primary"></i>Top IPs com SERVFAIL</div>
           <div id="list-top-ips" class="mt-3"></div>
         </div>
       </div>
@@ -1285,7 +1277,7 @@ async function syncBotnet(){
 
 // Advanced Stats
 async function loadAdvancedStats(){
-  const lists = ['domains', 'servfail', 'ips'];
+  const lists = ['servfail', 'ips'];
   lists.forEach(l => {
     document.getElementById('list-top-'+l).innerHTML = '<p style="color:var(--muted);text-align:center;padding:16px"><i class="bi bi-arrow-repeat spin"></i> Carregando...</p>';
   });
@@ -1321,7 +1313,6 @@ async function loadAdvancedStats(){
       list.innerHTML = html;
     }
     
-    renderList('list-top-domains', d.top_domains);
     renderList('list-top-servfail', d.top_servfail);
     renderList('list-top-ips', d.top_ips);
   } catch(e) {
