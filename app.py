@@ -539,6 +539,160 @@ def logs_stream():
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
+# Config Management
+UNBOUND_CONF = os.getenv("UNBOUND_CONF", "/etc/unbound/unbound.conf")
+
+CONFIG_DEFS = {
+    "logs": [
+        {"key": "log-queries", "type": "bool", "desc": "Registra todas as consultas DNS recebidas. Gera alto volume de log."},
+        {"key": "log-replies", "type": "bool", "desc": "Registra todas as respostas DNS enviadas. Gera alto volume de log."},
+        {"key": "log-servfail", "type": "bool", "desc": "Registra apenas erros SERVFAIL com IP de origem e domínio. Baixo volume."},
+        {"key": "verbosity", "type": "int", "desc": "Nível de detalhe dos logs. 0=silencioso, 1=operacional, 2+=debug."},
+    ],
+    "cache": [
+        {"key": "cache-min-ttl", "type": "int", "desc": "Tempo mínimo (segundos) que um registro fica no cache, mesmo que o TTL original seja menor."},
+        {"key": "cache-max-ttl", "type": "int", "desc": "Tempo máximo (segundos) que um registro permanece no cache. Padrão: 86400."},
+        {"key": "cache-max-negative-ttl", "type": "int", "desc": "Tempo máximo (segundos) que respostas negativas (NXDOMAIN) ficam no cache."},
+        {"key": "serve-expired-ttl", "type": "int", "desc": "Por quanto tempo (segundos) servir registros expirados enquanto busca atualização."},
+        {"key": "prefetch", "type": "bool", "desc": "Busca registros prestes a expirar antes que o TTL acabe, mantendo o cache quente."},
+        {"key": "serve-expired", "type": "bool", "desc": "Serve registros expirados do cache enquanto faz nova consulta em background."},
+    ],
+    "performance": [
+        {"key": "num-threads", "type": "int", "desc": "Número de threads de processamento. Ideal: igual ao número de CPUs."},
+        {"key": "outgoing-range", "type": "int", "desc": "Número máximo de portas abertas para consultas recursivas simultâneas."},
+        {"key": "num-queries-per-thread", "type": "int", "desc": "Máximo de consultas simultâneas por thread."},
+        {"key": "msg-cache-size", "type": "size", "desc": "Tamanho do cache de mensagens DNS (em MB)."},
+        {"key": "rrset-cache-size", "type": "size", "desc": "Tamanho do cache de RRsets. Recomendado: 2x o msg-cache."},
+    ],
+    "security": [
+        {"key": "ip-ratelimit", "type": "int", "desc": "Limite de consultas por segundo por IP de origem. 0=desativado."},
+        {"key": "harden-dnssec-stripped", "type": "bool", "desc": "Rejeita respostas que removem dados DNSSEC."},
+        {"key": "harden-glue", "type": "bool", "desc": "Rejeita registros de cola (glue) fora da zona autoritativa."},
+        {"key": "hide-identity", "type": "bool", "desc": "Oculta o nome do servidor em respostas CHAOS TXT."},
+        {"key": "hide-version", "type": "bool", "desc": "Oculta a versão do Unbound em respostas CHAOS TXT."},
+        {"key": "deny-any", "type": "bool", "desc": "Recusa consultas do tipo ANY, reduzindo amplificação de DDoS."},
+        {"key": "use-caps-for-id", "type": "bool", "desc": "Usa variação de maiúsculas/minúsculas como proteção anti-spoofing."},
+    ],
+}
+
+def parse_unbound_conf():
+    """Lê o unbound.conf e retorna dict com os valores das configurações editáveis."""
+    all_keys = {item["key"] for items in CONFIG_DEFS.values() for item in items}
+    values = {}
+    try:
+        with open(UNBOUND_CONF) as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("#") or ":" not in stripped:
+                    continue
+                key, _, val = stripped.partition(":")
+                key = key.strip()
+                val = val.strip()
+                if key in all_keys:
+                    values[key] = val
+    except Exception as e:
+        print(f"parse_unbound_conf error: {e}")
+    return values
+
+def format_config_value(key, raw_value, cfg_type):
+    """Converte valor bruto para formato de exibição."""
+    if cfg_type == "bool":
+        return raw_value.lower() in ("yes", "true", "1")
+    elif cfg_type == "size":
+        v = raw_value.lower().replace("m", "").replace("g", "").strip()
+        if "g" in raw_value.lower():
+            return int(float(v) * 1024)
+        return int(v) if v.isdigit() else 0
+    elif cfg_type == "int":
+        try:
+            return int(raw_value)
+        except:
+            return 0
+    return raw_value
+
+def to_conf_value(val, cfg_type):
+    """Converte valor do frontend para formato do unbound.conf."""
+    if cfg_type == "bool":
+        return "yes" if val else "no"
+    elif cfg_type == "size":
+        return f"{int(val)}m"
+    elif cfg_type == "int":
+        return str(int(val))
+    return str(val)
+
+@app.route("/api/config", methods=["GET"])
+def config_get():
+    raw = parse_unbound_conf()
+    result = {}
+    for cat, items in CONFIG_DEFS.items():
+        result[cat] = []
+        for item in items:
+            raw_val = raw.get(item["key"], "")
+            result[cat].append({
+                "key": item["key"],
+                "type": item["type"],
+                "desc": item["desc"],
+                "value": format_config_value(item["key"], raw_val, item["type"]) if raw_val else None,
+            })
+    return jsonify(result)
+
+@app.route("/api/config", methods=["POST"])
+def config_save():
+    changes = request.json
+    if not changes or not isinstance(changes, dict):
+        return jsonify({"error": "Dados inválidos"}), 400
+
+    type_map = {item["key"]: item["type"] for items in CONFIG_DEFS.values() for item in items}
+    allowed_keys = set(type_map.keys())
+
+    try:
+        with open(UNBOUND_CONF) as f:
+            original = f.read()
+        lines = original.splitlines(True)
+
+        for key, val in changes.items():
+            if key not in allowed_keys:
+                continue
+            conf_val = to_conf_value(val, type_map[key])
+            pattern = re.compile(r'^(\s*)' + re.escape(key) + r'\s*:.*$', re.MULTILINE)
+            found = False
+            for i, line in enumerate(lines):
+                if pattern.match(line.rstrip('\n')):
+                    indent = pattern.match(line.rstrip('\n')).group(1)
+                    lines[i] = f"{indent}{key}: {conf_val}\n"
+                    found = True
+                    break
+            if not found:
+                # Insere na seção server:
+                for i, line in enumerate(lines):
+                    if line.strip() == 'server:':
+                        lines.insert(i + 1, f"    {key}: {conf_val}\n")
+                        break
+
+        new_content = "".join(lines)
+        tmp = UNBOUND_CONF + ".tmp"
+        with open(tmp, "w") as f:
+            f.write(new_content)
+        os.replace(tmp, UNBOUND_CONF)
+
+        check = subprocess.run(["unbound-checkconf", UNBOUND_CONF], capture_output=True, text=True)
+        if check.returncode != 0:
+            with open(UNBOUND_CONF, "w") as f:
+                f.write(original)
+            err = check.stderr.strip() or check.stdout.strip() or "Configuração inválida"
+            return jsonify({"error": f"Validação falhou: {err}"}), 400
+
+        reload_r = subprocess.run(["unbound-control", "reload"], capture_output=True, text=True)
+        if reload_r.returncode != 0:
+            with open(UNBOUND_CONF, "w") as f:
+                f.write(original)
+            subprocess.run(["unbound-control", "reload"], capture_output=True)
+            return jsonify({"error": "Falha ao recarregar. Configuração revertida."}), 500
+
+        return jsonify({"ok": True, "msg": "Configurações aplicadas com sucesso."})
+    except Exception as e:
+        return jsonify({"error": f"Erro ao salvar: {e}"}), 500
+
 HTML = r"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -675,6 +829,7 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
     <div class="nav-item" onclick="showPage('blocklist',this)"><i class="bi bi-slash-circle"></i> Bloqueios</div>
     <div class="nav-item" onclick="showPage('advanced',this)"><i class="bi bi-bar-chart-steps"></i> Avançado</div>
     <div class="nav-item" onclick="showPage('logs',this)"><i class="bi bi-terminal"></i> Logs</div>
+    <div class="nav-item" onclick="showPage('config',this)"><i class="bi bi-gear"></i> Configurações</div>
   </div>
 </div>
 <div class="main">
@@ -892,6 +1047,23 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
       </div>
     </div>
   </div>
+
+  <!-- CONFIGURAÇÕES -->
+  <div id="page-config" class="page">
+    <div class="topbar" style="justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <img src="/static/logo.png" alt="Elevate Network" class="topbar-mobile-logo" style="display: none; max-height: 40px; object-fit: contain; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"/>
+        <img src="/static/unbound-logo.png" alt="Unbound Logo" style="max-height: 55px; object-fit: contain; margin-left: 4px;"/>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <button class="refresh-btn" onclick="loadConfig()"><i class="bi bi-arrow-clockwise"></i> Recarregar</button>
+        <button class="refresh-btn text-success" onclick="saveConfig()" id="btn-save-config" style="border-color:var(--success);font-weight:600;"><i class="bi bi-check-lg"></i> Salvar e Aplicar</button>
+      </div>
+    </div>
+    <div class="section-title"><i class="bi bi-gear text-primary"></i> Configurações do Unbound</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:16px;"><i class="bi bi-info-circle"></i> Alterações são validadas automaticamente antes de serem aplicadas. Em caso de erro, a configuração anterior é restaurada.</div>
+    <div id="config-container"></div>
+  </div>
 </div>
 
 <div class="toast-container"><div id="toast" class="toast align-items-center text-white border-0" role="alert"><div class="d-flex"><div class="toast-body" id="toast-msg"></div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div></div>
@@ -921,6 +1093,7 @@ function showPage(name,el){
   if(name==='dashboard')loadAll();
   if(name==='blocklist')loadBlocklist();
   if(name==='advanced')loadAdvancedStats();
+  if(name==='config')loadConfig();
 }
 function showToast(msg,ok=true){
   const t=document.getElementById('toast');
@@ -1361,6 +1534,85 @@ function clearLogs(){
 function togglePause(){
   logPaused=!logPaused;
   document.getElementById('btn-pause').innerHTML=logPaused?'<i class="bi bi-play-fill"></i> Retomar':'<i class="bi bi-pause-fill"></i> Pausar';
+}
+
+// Config page
+let configData = {};
+async function loadConfig(){
+  try {
+    const r = await fetch('/api/config');
+    configData = await r.json();
+    renderConfig();
+  } catch(e) { console.error('config load error:', e); }
+}
+function renderConfig(){
+  const container = document.getElementById('config-container');
+  const catNames = {logs:'📋 Logs',cache:'⚡ Cache',performance:'🔧 Performance',security:'🛡️ Segurança'};
+  const catIcons = {logs:'bi-journal-text',cache:'bi-lightning-charge',performance:'bi-cpu',security:'bi-shield-lock'};
+  let html = '<div class="row g-3">';
+  for(const [cat, items] of Object.entries(configData)){
+    html += `<div class="col-md-6"><div class="chart-card" style="margin-bottom:0;">`;
+    html += `<div class="chart-title" style="margin-bottom:14px;"><i class="bi ${catIcons[cat]||'bi-gear'} text-primary me-2"></i>${catNames[cat]||cat}</div>`;
+    items.forEach(item => {
+      const val = item.value;
+      if(item.type === 'bool'){
+        const checked = val ? 'checked' : '';
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">`;
+        html += `<div style="flex:1;"><div style="font-weight:600;font-size:.85rem;color:var(--text);">${item.key}</div><div style="font-size:.73rem;color:var(--muted);margin-top:2px;">${item.desc}</div></div>`;
+        html += `<label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;">`;
+        html += `<input type="checkbox" data-key="${item.key}" data-type="bool" ${checked} style="opacity:0;width:0;height:0;" onchange="this.parentNode.querySelector('span').style.background=this.checked?'var(--primary)':'var(--border)'">`;
+        html += `<span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:${val?'var(--primary)':'var(--border)'};transition:.3s;border-radius:24px;"></span>`;
+        html += `<span style="position:absolute;content:'';height:18px;width:18px;left:${val?'23px':'3px'};bottom:3px;background:#fff;transition:.3s;border-radius:50%;pointer-events:none;"></span>`;
+        html += `</label></div>`;
+      } else if(item.key === 'verbosity'){
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">`;
+        html += `<div style="flex:1;"><div style="font-weight:600;font-size:.85rem;color:var(--text);">${item.key}</div><div style="font-size:.73rem;color:var(--muted);margin-top:2px;">${item.desc}</div></div>`;
+        html += `<select data-key="${item.key}" data-type="int" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:.85rem;width:60px;text-align:center;margin-left:12px;">`;
+        for(let i=0;i<=5;i++) html += `<option value="${i}" ${val==i?'selected':''}>${i}</option>`;
+        html += `</select></div>`;
+      } else {
+        const suffix = item.type === 'size' ? ' MB' : (item.desc.includes('segundo') ? ' s' : '');
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">`;
+        html += `<div style="flex:1;"><div style="font-weight:600;font-size:.85rem;color:var(--text);">${item.key}</div><div style="font-size:.73rem;color:var(--muted);margin-top:2px;">${item.desc}</div></div>`;
+        html += `<div style="display:flex;align-items:center;gap:4px;margin-left:12px;"><input type="number" data-key="${item.key}" data-type="${item.type}" value="${val!=null?val:''}" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:.85rem;width:100px;text-align:center;"/>`;
+        if(suffix) html += `<span style="font-size:.75rem;color:var(--muted);">${suffix}</span>`;
+        html += `</div></div>`;
+      }
+    });
+    html += `</div></div>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+  // Fix toggle visual
+  container.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', function(){
+      const slider = this.parentNode.querySelectorAll('span');
+      if(slider[0]) slider[0].style.background = this.checked ? 'var(--primary)' : 'var(--border)';
+      if(slider[1]) slider[1].style.left = this.checked ? '23px' : '3px';
+    });
+  });
+}
+async function saveConfig(){
+  if(!confirm('Deseja aplicar as alterações? O Unbound será recarregado.')) return;
+  const changes = {};
+  document.querySelectorAll('#config-container [data-key]').forEach(el => {
+    const key = el.getAttribute('data-key');
+    const type = el.getAttribute('data-type');
+    if(type === 'bool') changes[key] = el.checked;
+    else if(type === 'size' || type === 'int') changes[key] = parseInt(el.value) || 0;
+    else changes[key] = el.value;
+  });
+  const btn = document.getElementById('btn-save-config');
+  btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Salvando...';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(changes)});
+    const d = await r.json();
+    if(!r.ok){ showToast(d.error || 'Erro ao salvar', false); }
+    else { showToast(d.msg || 'Configurações aplicadas!', true); loadConfig(); }
+  } catch(e) { showToast('Erro na requisição: '+e, false); }
+  btn.innerHTML = '<i class="bi bi-check-lg"></i> Salvar e Aplicar';
+  btn.disabled = false;
 }
 
 // Init: stats a cada 5s, history a cada 30s
