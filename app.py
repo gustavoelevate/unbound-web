@@ -693,6 +693,125 @@ def config_save():
     except Exception as e:
         return jsonify({"error": f"Erro ao salvar: {e}"}), 500
 
+# ACL Management
+def read_acl():
+    """Lê as regras access-control do unbound.conf."""
+    acl = []
+    try:
+        with open(UNBOUND_CONF) as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    continue
+                if stripped.startswith("access-control:"):
+                    parts = stripped.replace("access-control:", "").strip().split()
+                    if len(parts) >= 2:
+                        acl.append({"subnet": parts[0], "action": parts[1]})
+    except Exception as e:
+        print(f"read_acl error: {e}")
+    return acl
+
+def write_acl(acl_list):
+    """Substitui todas as regras access-control no unbound.conf."""
+    with open(UNBOUND_CONF) as f:
+        original = f.read()
+    lines = original.splitlines(True)
+
+    # Remove linhas existentes de access-control
+    new_lines = [l for l in lines if not l.strip().startswith("access-control:") or l.strip().startswith("#")]
+
+    # Encontra a seção server: e insere após a última diretiva antes de outras seções
+    insert_idx = None
+    for i, line in enumerate(new_lines):
+        if line.strip() == 'server:':
+            # Busca o melhor ponto para inserir (após outras diretivas do server)
+            for j in range(i + 1, len(new_lines)):
+                s = new_lines[j].strip()
+                if s and not s.startswith("#") and not s.startswith("include:") and ":" in s and new_lines[j][0] == ' ':
+                    insert_idx = j + 1
+                elif s and not s.startswith("#") and not new_lines[j][0] == ' ' and s != '':
+                    break
+            break
+
+    if insert_idx is None:
+        for i, line in enumerate(new_lines):
+            if line.strip() == 'server:':
+                insert_idx = i + 1
+                break
+
+    if insert_idx is not None:
+        acl_lines = [f"    access-control: {entry['subnet']} {entry['action']}\n" for entry in acl_list]
+        for idx, acl_line in enumerate(acl_lines):
+            new_lines.insert(insert_idx + idx, acl_line)
+
+    return original, "".join(new_lines)
+
+@app.route("/api/config/acl", methods=["GET"])
+def acl_get():
+    return jsonify({"acl": read_acl()})
+
+@app.route("/api/config/acl", methods=["POST"])
+def acl_add():
+    subnet = request.json.get("subnet", "").strip()
+    action = request.json.get("action", "allow").strip().lower()
+    if not subnet:
+        return jsonify({"error": "Sub-rede não informada"}), 400
+    if action not in ("allow", "deny", "refuse", "allow_snoop", "allow_setrd", "allow_cookie"):
+        return jsonify({"error": "Ação inválida"}), 400
+    if not re.match(r'^[a-fA-F0-9\.:]+/\d{1,3}$', subnet):
+        return jsonify({"error": "Formato inválido. Use CIDR: ex. 10.0.0.0/8 ou 2804:6e30::/32"}), 400
+
+    acl = read_acl()
+    # Verifica duplicata
+    for entry in acl:
+        if entry["subnet"] == subnet:
+            return jsonify({"error": f"Sub-rede {subnet} já existe na lista"}), 409
+
+    # Insere antes das regras deny globais
+    deny_idx = len(acl)
+    for i, entry in enumerate(acl):
+        if entry["action"] == "deny" and entry["subnet"] in ("0.0.0.0/0", "::/0"):
+            deny_idx = i
+            break
+    acl.insert(deny_idx, {"subnet": subnet, "action": action})
+
+    try:
+        original, new_content = write_acl(acl)
+        with open(UNBOUND_CONF, "w") as f:
+            f.write(new_content)
+        check = subprocess.run(["unbound-checkconf", UNBOUND_CONF], capture_output=True, text=True)
+        if check.returncode != 0:
+            with open(UNBOUND_CONF, "w") as f:
+                f.write(original)
+            return jsonify({"error": f"Validação falhou: {check.stderr.strip() or check.stdout.strip()}"}), 400
+        subprocess.run(["unbound-control", "reload"], capture_output=True, text=True)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": f"Erro: {e}"}), 500
+
+@app.route("/api/config/acl", methods=["DELETE"])
+def acl_delete():
+    subnet = request.json.get("subnet", "").strip()
+    if not subnet:
+        return jsonify({"error": "Sub-rede não informada"}), 400
+    acl = read_acl()
+    new_acl = [e for e in acl if e["subnet"] != subnet]
+    if len(new_acl) == len(acl):
+        return jsonify({"error": "Sub-rede não encontrada"}), 404
+    try:
+        original, new_content = write_acl(new_acl)
+        with open(UNBOUND_CONF, "w") as f:
+            f.write(new_content)
+        check = subprocess.run(["unbound-checkconf", UNBOUND_CONF], capture_output=True, text=True)
+        if check.returncode != 0:
+            with open(UNBOUND_CONF, "w") as f:
+                f.write(original)
+            return jsonify({"error": f"Validação falhou: {check.stderr.strip() or check.stdout.strip()}"}), 400
+        subprocess.run(["unbound-control", "reload"], capture_output=True, text=True)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": f"Erro: {e}"}), 500
+
 HTML = r"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -1063,6 +1182,21 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
     <div class="section-title"><i class="bi bi-gear text-primary"></i> Configurações do Unbound</div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:16px;"><i class="bi bi-info-circle"></i> Alterações são validadas automaticamente antes de serem aplicadas. Em caso de erro, a configuração anterior é restaurada.</div>
     <div id="config-container"></div>
+
+    <div class="section-title" style="margin-top:24px;"><i class="bi bi-globe text-primary"></i> Controle de Acesso (ACL)</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;"><i class="bi bi-info-circle"></i> Sub-redes autorizadas a consultar o DNS. Regras de bloqueio global (0.0.0.0/0 e ::/0) são mantidas automaticamente no final.</div>
+    <div class="chart-card mb-3">
+      <div class="d-flex gap-2 flex-wrap">
+        <input type="text" class="form-control" id="new-acl-subnet" placeholder="Ex: 192.168.1.0/24 ou 2804:1234::/32" style="flex:1;min-width:200px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.85rem;font-family:inherit;" onkeydown="if(event.key==='Enter')addAcl()"/>
+        <select id="new-acl-action" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.85rem;">
+          <option value="allow">allow</option>
+          <option value="deny">deny</option>
+          <option value="refuse">refuse</option>
+        </select>
+        <button class="btn btn-danger px-4" onclick="addAcl()"><i class="bi bi-plus-lg me-1"></i>Adicionar</button>
+      </div>
+    </div>
+    <div class="chart-card" id="acl-list"></div>
   </div>
 </div>
 
@@ -1093,7 +1227,7 @@ function showPage(name,el){
   if(name==='dashboard')loadAll();
   if(name==='blocklist')loadBlocklist();
   if(name==='advanced')loadAdvancedStats();
-  if(name==='config')loadConfig();
+  if(name==='config'){loadConfig();loadAcl();}
 }
 function showToast(msg,ok=true){
   const t=document.getElementById('toast');
@@ -1613,6 +1747,61 @@ async function saveConfig(){
   } catch(e) { showToast('Erro na requisição: '+e, false); }
   btn.innerHTML = '<i class="bi bi-check-lg"></i> Salvar e Aplicar';
   btn.disabled = false;
+}
+
+// ACL Management
+async function loadAcl(){
+  try {
+    const r = await fetch('/api/config/acl');
+    const d = await r.json();
+    const list = document.getElementById('acl-list');
+    if(!d.acl || !d.acl.length){
+      list.innerHTML = '<p style="color:var(--muted);text-align:center;padding:16px;">Nenhuma regra de acesso configurada.</p>';
+      return;
+    }
+    let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+    d.acl.forEach(entry => {
+      const isGlobalDeny = (entry.subnet === '0.0.0.0/0' || entry.subnet === '::/0') && entry.action === 'deny';
+      const actionColor = entry.action === 'allow' ? 'var(--success)' : (entry.action === 'deny' ? 'var(--danger)' : 'var(--warning)');
+      const icon = entry.action === 'allow' ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:var(--domain-bg);border:1px solid var(--border);">`;
+      html += `<div style="display:flex;align-items:center;gap:10px;">`;
+      html += `<i class="bi ${icon}" style="color:${actionColor};font-size:1rem;"></i>`;
+      html += `<span style="font-family:'Menlo','Consolas',monospace;font-size:.85rem;font-weight:600;color:var(--text);">${entry.subnet}</span>`;
+      html += `<span style="font-size:.72rem;padding:2px 8px;border-radius:4px;background:${actionColor}20;color:${actionColor};font-weight:600;">${entry.action}</span>`;
+      if(isGlobalDeny) html += `<span style="font-size:.68rem;color:var(--muted);font-style:italic;">bloqueio global</span>`;
+      html += `</div>`;
+      if(!isGlobalDeny){
+        html += `<button onclick="removeAcl('${entry.subnet}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;padding:4px 8px;" title="Remover"><i class="bi bi-trash"></i></button>`;
+      }
+      html += `</div>`;
+    });
+    html += '</div>';
+    list.innerHTML = html;
+  } catch(e) { console.error('acl load error:', e); }
+}
+async function addAcl(){
+  const subnet = document.getElementById('new-acl-subnet').value.trim();
+  const action = document.getElementById('new-acl-action').value;
+  if(!subnet){ showToast('Informe uma sub-rede', false); return; }
+  try {
+    const r = await fetch('/api/config/acl', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({subnet, action})});
+    const d = await r.json();
+    if(!r.ok){ showToast(d.error || 'Erro ao adicionar', false); return; }
+    showToast('Sub-rede adicionada com sucesso!');
+    document.getElementById('new-acl-subnet').value = '';
+    loadAcl();
+  } catch(e) { showToast('Erro: '+e, false); }
+}
+async function removeAcl(subnet){
+  if(!confirm('Remover a sub-rede ' + subnet + ' do controle de acesso?')) return;
+  try {
+    const r = await fetch('/api/config/acl', {method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({subnet})});
+    const d = await r.json();
+    if(!r.ok){ showToast(d.error || 'Erro ao remover', false); return; }
+    showToast('Sub-rede removida com sucesso!');
+    loadAcl();
+  } catch(e) { showToast('Erro: '+e, false); }
 }
 
 // Init: stats a cada 5s, history a cada 30s
