@@ -74,7 +74,7 @@ def get_servfail(d):
 
 def parse_stats():
     try:
-        out = subprocess.check_output(["unbound-control", "stats"], text=True)
+        out = subprocess.check_output(["unbound-control", "stats_noreset"], text=True)
         d = {}
         for line in out.splitlines():
             if "=" in line:
@@ -151,7 +151,9 @@ def collect():
                             "sum_time": sum_time_s, "dnssec_ok": dnssec_ok_cum, "dnssec_bad": dnssec_bad_cum,
                             "qa": qa_cum, "qaaaa": qaaaa_cum, "qcname": qcname_cum, "qsf": qsf_cum,
                             "ts": now}
-            save_history()
+            # Salvar historico no disco a cada 2 ciclos (~60s) em vez de cada 30s
+            if len(history["timestamps"]) % 2 == 0:
+                save_history()
         except Exception as e:
             print(f"Collector error: {e}")
         time.sleep(COLLECT_INTERVAL)
@@ -263,31 +265,25 @@ def stats():
 def api_history():
     hours = int(request.args.get("hours", 1))
     points = min(hours * POINTS_PER_HOUR, HISTORY_POINTS)
-    ts   = list(history["timestamps"])
-    qps  = list(history["qps"])
-    ch   = list(history["cachehits"])
-    cm   = list(history["cachemiss"])
-    dok  = list(history["dnssec_ok"])
-    dbad = list(history["dnssec_bad"])
-    ravg = list(history["resp_avg"])
-    rmed = list(history["resp_med"])
-    qa = list(history["qps_a"])
-    qaaaa = list(history["qps_aaaa"])
-    qcname = list(history["qps_cname"])
-    qsf = list(history["qps_servfail"])
+    # Evita criar 12 c\u00f3pias inteiras das deques - fatia direto
+    def tail(key):
+        d = history[key]
+        n = len(d)
+        start = max(0, n - points)
+        return [d[i] for i in range(start, n)]
     return jsonify({
-        "timestamps":   ts[-points:],
-        "qps":          qps[-points:],
-        "cachehits":    ch[-points:],
-        "cachemiss":    cm[-points:],
-        "dnssec_ok":    dok[-points:],
-        "dnssec_bad":   dbad[-points:],
-        "resp_avg":     ravg[-points:],
-        "resp_med":     rmed[-points:],
-        "qps_a":        qa[-points:],
-        "qps_aaaa":     qaaaa[-points:],
-        "qps_cname":    qcname[-points:],
-        "qps_servfail": qsf[-points:],
+        "timestamps":   tail("timestamps"),
+        "qps":          tail("qps"),
+        "cachehits":    tail("cachehits"),
+        "cachemiss":    tail("cachemiss"),
+        "dnssec_ok":    tail("dnssec_ok"),
+        "dnssec_bad":   tail("dnssec_bad"),
+        "resp_avg":     tail("resp_avg"),
+        "resp_med":     tail("resp_med"),
+        "qps_a":        tail("qps_a"),
+        "qps_aaaa":     tail("qps_aaaa"),
+        "qps_cname":    tail("qps_cname"),
+        "qps_servfail": tail("qps_servfail"),
         "points_per_hour": POINTS_PER_HOUR,
     })
 
@@ -298,11 +294,14 @@ def debug_stats():
     return jsonify(d)
 
 advanced_stats_cache = {"ts": 0, "data": None}
+# Regex pr\u00e9-compilados para extra\u00e7\u00e3o de stats avan\u00e7ados (evita recompila\u00e7\u00e3o a cada requisi\u00e7\u00e3o)
+_re_domain = re.compile(r'([a-zA-Z0-9_\.-]+)\.\s+[A-Z]+\s+IN')
+_re_ip = re.compile(r'(?:info:|reply:|query:)\s+([a-fA-F0-9\.:]+)')
+_re_ip_fallback = re.compile(r'(?:reply:|servfail|warning:|error:)\s+([a-fA-F0-9\.:]+)')
 
 @app.route("/api/stats/advanced")
 def stats_advanced():
     global advanced_stats_cache
-    import time
     
     # Retorna do cache se tiver sido processado a menos de 10 minutos (600 segundos)
     if advanced_stats_cache["data"] and (time.time() - advanced_stats_cache["ts"]) < 600:
@@ -314,19 +313,14 @@ def stats_advanced():
         uptime = float(d_stats.get("time.up", 1))
         qps = queries / uptime if uptime > 0 else 50
         
-        # 12 horas estático
+        # 12 horas est\u00e1tico - limitar a 5M linhas para evitar I/O excessivo
         lines_to_read = int(qps * 3 * 3600 * 12)
-        lines_to_read = max(lines_to_read, 50000)
+        lines_to_read = max(50000, min(lines_to_read, 5000000))
         
         proc = subprocess.Popen(["tail", "-n", str(lines_to_read), LOG_FILE], stdout=subprocess.PIPE, text=True)
         
         top_servfail = {}
         top_ips = {}
-        
-        import re
-        re_domain = re.compile(r'([a-zA-Z0-9_\.-]+)\.\s+[A-Z]+\s+IN')
-        re_ip = re.compile(r'(?:info:|reply:|query:)\s+([a-fA-F0-9\.:]+)')
-        re_ip_fallback = re.compile(r'(?:reply:|servfail|warning:|error:)\s+([a-fA-F0-9\.:]+)')
         
         for line in proc.stdout:
             line_lower = line.lower()
@@ -334,7 +328,7 @@ def stats_advanced():
                 continue
 
             # Extrair dominio
-            m_domain = re_domain.search(line)
+            m_domain = _re_domain.search(line)
             if not m_domain: continue
             
             domain = m_domain.group(1).lower()
@@ -342,11 +336,11 @@ def stats_advanced():
 
             # Extrair IP
             ip = None
-            m_ip = re_ip.search(line)
+            m_ip = _re_ip.search(line)
             if m_ip:
                 ip = m_ip.group(1)
                 if ip in ("reply:", "servfail", "warning:", "error:"):
-                    m2 = re_ip_fallback.search(line)
+                    m2 = _re_ip_fallback.search(line)
                     if m2: ip = m2.group(1)
             
             if ip and (ip.startswith('<') or ip.lower() in ("servfail", "warning:", "error:", "reply:")):
@@ -922,19 +916,36 @@ body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);fon
   .sidebar { width: 100%; height: 65px; min-height: auto; position: fixed; bottom: 0; left: 0; top: auto; border-right: none; border-top: 1px solid var(--border); display: flex; z-index: 1000; padding: 0 !important; }
   .brand { display: none !important; }
   .sidebar > div { display: flex; width: 100%; padding: 0 !important; justify-content: space-between; }
-  .nav-item { flex: 1; justify-content: center; padding: 8px 4px; font-size: 0.7rem; flex-direction: column; gap: 4px; border-left: none; border-top: 3px solid transparent; text-align: center; }
+  .nav-item { flex: 1; justify-content: center; padding: 8px 4px; font-size: 0.65rem; flex-direction: column; gap: 2px; border-left: none; border-top: 3px solid transparent; text-align: center; white-space: nowrap; overflow: hidden; }
+  .nav-item i { font-size: 1.1rem; }
   .nav-item.active { border-left-color: transparent; border-top-color: var(--primary); background: var(--nav-hover); }
-  .main { margin-left: 0; padding: 16px; padding-bottom: 85px; }
-  .topbar { flex-direction: column; align-items: center; gap: 12px; }
+  .main { margin-left: 0; padding: 12px; padding-bottom: 85px; }
+  .topbar { flex-direction: column; align-items: center; gap: 10px; }
   .topbar > div, .topbar .d-flex { flex-wrap: wrap; justify-content: center !important; width: 100%; }
-  .topbar img { margin-bottom: 8px; }
-  .topbar-mobile-logo { display: block !important; margin-bottom: 8px !important; }
+  .topbar img { margin-bottom: 6px; }
+  .topbar-mobile-logo { display: block !important; margin-bottom: 6px !important; }
   #log-ip-filter { width: 100% !important; margin-bottom: 8px; }
-  .metric-card { padding: 12px 14px !important; }
-  .metric-card .value { font-size: clamp(1.1rem, 7vw, 1.4rem); }
-  div[style*="font-size:1.8rem"] { font-size: clamp(1.2rem, 7vw, 1.5rem) !important; }
-  .chart-card .d-flex.justify-content-between { flex-direction: column; align-items: flex-start !important; gap: 10px; }
+  .metric-card { padding: 10px 12px !important; }
+  .metric-card .value { font-size: clamp(1rem, 6vw, 1.3rem); }
+  .metric-card .label { font-size: .7rem; }
+  div[style*="font-size:1.8rem"] { font-size: clamp(1rem, 6vw, 1.3rem) !important; }
+  .chart-card .d-flex.justify-content-between { flex-direction: column; align-items: flex-start !important; gap: 8px; }
+  .chart-card { padding: 14px 12px; }
   .period-group { flex-wrap: wrap; justify-content: flex-start; }
+  .section-title { font-size: .65rem; }
+  .refresh-btn { font-size: .72rem; padding: 5px 10px; }
+  .badge-status { font-size: .7rem; padding: 4px 8px; }
+  #log-box { height: 350px; font-size: .68rem; }
+  .row.g-3 > [class*="col-md-"] { flex: 0 0 100%; max-width: 100%; }
+  .row.g-3 > .col-md-2 { flex: 0 0 50%; max-width: 50%; }
+  #config-container .chart-card { margin-bottom: 0; }
+  #config-container [style*="width:100px"] { width: 70px !important; }
+  #config-container [style*="width:60px"] { width: 50px !important; }
+  #config-container [style*="font-size:.85rem"] { font-size: .78rem !important; }
+  #acl-list [style*="font-size:.85rem"] { font-size: .72rem !important; word-break: break-all; }
+  #acl-list > div > div { flex-direction: column; gap: 6px !important; align-items: flex-start !important; }
+  #acl-list button { align-self: flex-end; }
+  .domain-tag { font-size: .72rem; padding: 3px 8px; }
 }
 </style>
 </head>
